@@ -1,0 +1,7 @@
+boto3~=1.34 # For AWS S3 integration
+watchdog~=4.0 # For real-time file system event monitoring
+mutagen~=1.47 # For reading/writing audio and video metadata (e.g., ID3 tags)
+trulens~=1.5.3 # Corrected: For LLM evaluation and tracking (migrated from trulens_eval)
+langchain~=0.2.0 # Added: Required by trulens for certain app integrations
+numpy<2.0.0 # Added: To resolve compatibility issues with pyarrow and pandas
+# ffprobe-python # Optional: A Python wrapper for ffprobe, if preferred over direct subprocess calls

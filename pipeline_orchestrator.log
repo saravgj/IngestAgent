@@ -1,0 +1,9 @@
+2025-07-14 20:00:15,694 - PipelineOrchestrator - INFO - Pipeline Orchestrator initialized. Agents are ready.
+2025-07-14 20:00:15,699 - PipelineOrchestrator - INFO - Cleaned directory: ./ingest_source
+2025-07-14 20:00:15,699 - PipelineOrchestrator - INFO - Cleaned directory: ./ingest_processed
+2025-07-14 20:00:15,700 - PipelineOrchestrator - INFO - Cleaned directory: ./graphics_output
+2025-07-14 20:00:15,700 - PipelineOrchestrator - INFO - Cleaned ingest_agent.log
+2025-07-14 20:00:15,701 - PipelineOrchestrator - INFO - Cleaned qc_agent.log
+2025-07-14 20:00:15,701 - PipelineOrchestrator - INFO - Cleaned graphics_agent.log
+2025-07-14 20:00:15,701 - PipelineOrchestrator - INFO - Cleaned scheduling_agent.log
+2025-07-14 20:00:15,703 - PipelineOrchestrator - INFO - Cleaned Trulens database: default.sqlite
