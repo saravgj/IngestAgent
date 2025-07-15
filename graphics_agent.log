@@ -1,0 +1,66 @@
+2025-07-15 12:40:12,656 - GraphicsAgent - INFO - Graphics Agent initialized.
+2025-07-15 12:40:12,656 - GraphicsAgent - INFO - Graphics Agent instance fully initialized and ready with OpenTelemetry tracer.
+2025-07-15 12:40:22,601 - GraphicsAgent - INFO - Graphics Agent received a message.
+2025-07-15 12:40:22,602 - GraphicsAgent - DEBUG - Thought Chain: Parsing incoming message payload.
+2025-07-15 12:40:22,602 - GraphicsAgent - INFO - Processing graphics for asset: 'My First Episode' (ID: 3e872f2c5008f32b024a9cb02112280e7ef9e2f1bb54a417f685dd96537fa504)
+2025-07-15 12:40:22,602 - GraphicsAgent - DEBUG - Thought Chain: Extracted key metadata for graphics generation.
+2025-07-15 12:40:22,602 - GraphicsAgent - DEBUG - Thought Chain: Initiating thumbnail generation.
+2025-07-15 12:40:22,657 - GraphicsAgent - INFO - Generated thumbnail: ./graphics_output/3e872f2c5008f32b024a9cb02112280e7ef9e2f1bb54a417f685dd96537fa504_thumbnail.png
+2025-07-15 12:40:22,657 - GraphicsAgent - DEBUG - Thought Chain: Thumbnail generation complete.
+2025-07-15 12:40:22,660 - GraphicsAgent - DEBUG - Thought Chain: Preparing title card text.
+2025-07-15 12:40:22,685 - GraphicsAgent - INFO - Prepared title card text: 'TITLE: My First Episode
+SUMMARY: A character navig...'
+2025-07-15 12:40:22,685 - GraphicsAgent - DEBUG - Thought Chain: Title card text preparation complete.
+2025-07-15 12:40:22,685 - GraphicsAgent - DEBUG - Thought Chain: Suggesting visual tags from AI keywords.
+2025-07-15 12:40:22,698 - GraphicsAgent - INFO - Suggested visual tags: futuristic, sterile environment, advanced technology, character, episode
+2025-07-15 12:40:22,698 - GraphicsAgent - DEBUG - Thought Chain: Visual tag suggestion complete.
+2025-07-15 12:40:22,698 - GraphicsAgent - INFO - Graphics generation complete for asset: 'My First Episode'.
+2025-07-15 12:40:22,698 - GraphicsAgent - DEBUG - Thought Chain: All graphics subtasks completed.
+2025-07-15 12:40:36,700 - GraphicsAgent - INFO - Graphics Agent received a message.
+2025-07-15 12:40:36,700 - GraphicsAgent - DEBUG - Thought Chain: Parsing incoming message payload.
+2025-07-15 12:40:36,702 - GraphicsAgent - INFO - Processing graphics for asset: 'Long Ad Campaign X' (ID: 3c195a0507198c7574551ae014247153b20bac784cf0a5c3b1fa5038c2900093)
+2025-07-15 12:40:36,702 - GraphicsAgent - DEBUG - Thought Chain: Extracted key metadata for graphics generation.
+2025-07-15 12:40:36,702 - GraphicsAgent - DEBUG - Thought Chain: Initiating thumbnail generation.
+2025-07-15 12:40:36,757 - GraphicsAgent - INFO - Generated thumbnail: ./graphics_output/3c195a0507198c7574551ae014247153b20bac784cf0a5c3b1fa5038c2900093_thumbnail.png
+2025-07-15 12:40:36,758 - GraphicsAgent - DEBUG - Thought Chain: Thumbnail generation complete.
+2025-07-15 12:40:36,758 - GraphicsAgent - DEBUG - Thought Chain: Preparing title card text.
+2025-07-15 12:40:36,780 - GraphicsAgent - INFO - Prepared title card text: 'TITLE: Long Ad Campaign X
+SUMMARY: "Long Ad Campai...'
+2025-07-15 12:40:36,780 - GraphicsAgent - DEBUG - Thought Chain: Title card text preparation complete.
+2025-07-15 12:40:36,780 - GraphicsAgent - DEBUG - Thought Chain: Suggesting visual tags from AI keywords.
+2025-07-15 12:40:36,792 - GraphicsAgent - INFO - Suggested visual tags: product, everyday settings, bright visuals, upbeat music, commercial
+2025-07-15 12:40:36,792 - GraphicsAgent - DEBUG - Thought Chain: Visual tag suggestion complete.
+2025-07-15 12:40:36,793 - GraphicsAgent - INFO - Graphics generation complete for asset: 'Long Ad Campaign X'.
+2025-07-15 12:40:36,793 - GraphicsAgent - DEBUG - Thought Chain: All graphics subtasks completed.
+2025-07-15 12:40:40,409 - GraphicsAgent - INFO - Graphics Agent received a message.
+2025-07-15 12:40:40,410 - GraphicsAgent - DEBUG - Thought Chain: Parsing incoming message payload.
+2025-07-15 12:40:40,410 - GraphicsAgent - INFO - Processing graphics for asset: 'Ad Missing Meta' (ID: dbbe5517996826bd5861ac22b745d21d11219055d89243ca1aea0ad31f552b12)
+2025-07-15 12:40:40,410 - GraphicsAgent - DEBUG - Thought Chain: Extracted key metadata for graphics generation.
+2025-07-15 12:40:40,410 - GraphicsAgent - DEBUG - Thought Chain: Initiating thumbnail generation.
+2025-07-15 12:40:40,461 - GraphicsAgent - INFO - Generated thumbnail: ./graphics_output/dbbe5517996826bd5861ac22b745d21d11219055d89243ca1aea0ad31f552b12_thumbnail.png
+2025-07-15 12:40:40,462 - GraphicsAgent - DEBUG - Thought Chain: Thumbnail generation complete.
+2025-07-15 12:40:40,462 - GraphicsAgent - DEBUG - Thought Chain: Preparing title card text.
+2025-07-15 12:40:40,485 - GraphicsAgent - INFO - Prepared title card text: 'TITLE: Ad Missing Meta
+SUMMARY: The media asset, t...'
+2025-07-15 12:40:40,485 - GraphicsAgent - DEBUG - Thought Chain: Title card text preparation complete.
+2025-07-15 12:40:40,486 - GraphicsAgent - DEBUG - Thought Chain: Suggesting visual tags from AI keywords.
+2025-07-15 12:40:40,499 - GraphicsAgent - INFO - Suggested visual tags: Missing Meta, advertisement
+2025-07-15 12:40:40,500 - GraphicsAgent - DEBUG - Thought Chain: Visual tag suggestion complete.
+2025-07-15 12:40:40,500 - GraphicsAgent - INFO - Graphics generation complete for asset: 'Ad Missing Meta'.
+2025-07-15 12:40:40,500 - GraphicsAgent - DEBUG - Thought Chain: All graphics subtasks completed.
+2025-07-15 12:40:49,968 - GraphicsAgent - INFO - Graphics Agent received a message.
+2025-07-15 12:40:49,968 - GraphicsAgent - DEBUG - Thought Chain: Parsing incoming message payload.
+2025-07-15 12:40:49,968 - GraphicsAgent - INFO - Processing graphics for asset: 'Duplicate Content' (ID: eb6183addde05c2196ce25e6fa34a4baf20f9bf30d33892f452a9a1e88c9a472)
+2025-07-15 12:40:49,968 - GraphicsAgent - DEBUG - Thought Chain: Extracted key metadata for graphics generation.
+2025-07-15 12:40:49,968 - GraphicsAgent - DEBUG - Thought Chain: Initiating thumbnail generation.
+2025-07-15 12:40:50,024 - GraphicsAgent - INFO - Generated thumbnail: ./graphics_output/eb6183addde05c2196ce25e6fa34a4baf20f9bf30d33892f452a9a1e88c9a472_thumbnail.png
+2025-07-15 12:40:50,024 - GraphicsAgent - DEBUG - Thought Chain: Thumbnail generation complete.
+2025-07-15 12:40:50,024 - GraphicsAgent - DEBUG - Thought Chain: Preparing title card text.
+2025-07-15 12:40:50,050 - GraphicsAgent - INFO - Prepared title card text: 'TITLE: Duplicate Content
+SUMMARY: This Test media ...'
+2025-07-15 12:40:50,051 - GraphicsAgent - DEBUG - Thought Chain: Title card text preparation complete.
+2025-07-15 12:40:50,051 - GraphicsAgent - DEBUG - Thought Chain: Suggesting visual tags from AI keywords.
+2025-07-15 12:40:50,064 - GraphicsAgent - INFO - Suggested visual tags: Duplicate Content, repeated information, Test media asset
+2025-07-15 12:40:50,064 - GraphicsAgent - DEBUG - Thought Chain: Visual tag suggestion complete.
+2025-07-15 12:40:50,065 - GraphicsAgent - INFO - Graphics generation complete for asset: 'Duplicate Content'.
+2025-07-15 12:40:50,065 - GraphicsAgent - DEBUG - Thought Chain: All graphics subtasks completed.

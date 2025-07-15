@@ -3,475 +3,283 @@ import json
 import time
 import logging
 from datetime import datetime
-import sys
 
-# Import the agents
+from langfuse import Langfuse
+
+langfuse = Langfuse(
+  secret_key="sk-lf-ad126451-35c2-438b-9ae6-72b5e5376270",
+  public_key="pk-lf-b9a5480d-3e5e-4330-924c-eeda46ea1db6",
+  host="https://us.cloud.langfuse.com"
+)
+
+import os
+import base64
+
+public = "pk-lf-b9a5480d-3e5e-4330-924c-eeda46ea1db6"
+secret = "sk-lf-ad126451-35c2-438b-9ae6-72b5e5376270"
+auth_string = f"{public}:{secret}"
+LANGFUSE_AUTH = base64.b64encode(auth_string.encode()).decode()
+
+os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] = "https://otlp.us.cloud.langfuse.com"
+os.environ["OTEL_EXPORTER_OTLP_HEADERS"] = f"Authorization=Basic {LANGFUSE_AUTH}"
+os.environ["OTEL_EXPORTER_OTLP_PROTOCOL"] = "http/protobuf"
+
+
+# --- OpenTelemetry Imports ---
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.resources import Resource
+
+# Import agents and their configurations
 from ingest_agent import IngestAgent, CONFIG as INGEST_CONFIG
-from qc_agent import QCAgent
-from graphics_agent import GraphicsAgent
-from ad_agent import AdAgent  # Import AdAgent
-from scheduling_agent import SchedulingAgent  # Import SchedulingAgent
-
-# --- Trulens Imports ---
-from trulens.core import TruSession
-from trulens.app import TruApp  # Changed import path to the recommended trulens.app
-from trulens.apps.custom import instrument  # Re-added instrument for clarity, though used in ingest_agent.py
+from qc_agent import QCAgent, CONFIG as QC_CONFIG
+from graphics_agent import GraphicsAgent  # Assuming GraphicsAgent doesn't have its own config needed here
+from scheduling_agent import SchedulingAgent, CONFIG as SCHEDULING_CONFIG
 
 # --- Setup Logging for Orchestrator ---
-logging.basicConfig(
-    level=logging.DEBUG,  # Set to INFO for less verbose output during normal runs
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger("PipelineOrchestrator")
-
-# Clear orchestrator log file on each run
 LOG_FILE = "pipeline_orchestrator.log"
 if os.path.exists(LOG_FILE):
     os.remove(LOG_FILE)
+
+logger = logging.getLogger("PipelineOrchestrator")
+logger.setLevel(logging.DEBUG)  # Set to DEBUG to capture all messages
+
 file_handler = logging.FileHandler(LOG_FILE)
 file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
 logger.addHandler(file_handler)
 
+stream_handler = logging.StreamHandler()
+stream_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+logger.addHandler(stream_handler)
 
-def clean_directory(directory_path):
-    """Removes all files from a given directory."""
-    if os.path.exists(directory_path):
-        for filename in os.listdir(directory_path):
-            file_path = os.path.join(directory_path, filename)
+# --- OpenTelemetry Global Setup ---
+# This block configures the global TracerProvider for the entire pipeline.
+# All agents will then retrieve this global tracer.
+langfuse_public_key = os.environ.get("LANGFUSE_PUBLIC_KEY")
+langfuse_secret_key = os.environ.get("LANGFUSE_SECRET_KEY")
+langfuse_host = os.environ.get("LANGFUSE_HOST", "https://cloud.langfuse.com")
+
+if not langfuse_public_key or not langfuse_secret_key:
+    logger.warning(
+        "Langfuse API keys not found in environment variables. OpenTelemetry traces will not be sent to Langfuse.")
+    provider = TracerProvider()
+else:
+    logger.info("Setting up OTLPSpanExporter for Langfuse in Orchestrator.")
+    # Define a resource for your service, which will be attached to all spans
+    resource = Resource.create({
+        "service.name": "cloudport-media-pipeline",
+        "service.version": "1.0.0",
+        "deployment.environment": "development"
+    })
+
+    exporter = OTLPSpanExporter(
+        endpoint=f"{langfuse_host}/v1/traces",
+        headers={
+            "X-Langfuse-Public-Key": langfuse_public_key,
+            "X-Langfuse-Secret-Key": langfuse_secret_key
+        },
+    )
+    provider = TracerProvider(resource=resource)
+    processor = BatchSpanProcessor(exporter)
+    provider.add_span_processor(processor)
+
+trace.set_tracer_provider(provider)
+orchestrator_tracer = trace.get_tracer(__name__)
+logger.info("OpenTelemetry TracerProvider globally configured by Orchestrator.")
+
+
+# --- End OpenTelemetry Global Setup ---
+
+
+class PipelineOrchestrator:
+    """
+    The Pipeline Orchestrator coordinates the flow of media assets
+    through various agents in the Cloudport system.
+    It manages the lifecycle of an asset from ingestion to final scheduling.
+    """
+
+    def __init__(self):
+        self.ingest_agent = IngestAgent(INGEST_CONFIG)
+        self.qc_agent = QCAgent(QC_CONFIG)
+        self.graphics_agent = GraphicsAgent()
+        self.scheduling_agent = SchedulingAgent(SCHEDULING_CONFIG)  # Pass config to SchedulingAgent
+        logger.info("Pipeline Orchestrator initialized with all agents.")
+        self.total_pipeline_runs = 0
+        self.successful_pipeline_runs = 0
+
+    def _cleanup_directories(self):
+        """Cleans up ingest_source and ingest_processed directories."""
+        for folder in [INGEST_CONFIG["watch_folders"][0], INGEST_CONFIG["output_folder"]]:
+            if os.path.exists(folder):
+                for f in os.listdir(folder):
+                    os.remove(os.path.join(folder, f))
+                os.rmdir(folder)  # Remove directory after emptying
+                logger.info(f"Cleaned up directory: {folder}")
+            os.makedirs(folder, exist_ok=True)  # Recreate empty directories
+            logger.info(f"Recreated empty directory: {folder}")
+
+    def run_pipeline_for_asset(self, asset_path):
+        """
+        Runs a single asset through the entire pipeline.
+        Each full pipeline run is a new trace.
+        """
+        self.total_pipeline_runs += 1
+        logger.info(f"\n--- Orchestrating pipeline for asset: {asset_path} ---")
+
+        # Start a new trace for this entire pipeline run
+        with orchestrator_tracer.start_as_current_span("pipeline_run", kind=trace.SpanKind.SERVER) as pipeline_span:
+            pipeline_span.set_attribute("asset.original_path", asset_path)
+            logger.debug(f"Thought Chain: Starting new pipeline run trace for {asset_path}.")
+
+            processed_ingest_info = None
+            qc_result = None
+
             try:
-                if os.path.isfile(file_path) or os.path.islink(file_path):
-                    os.unlink(file_path)
-                elif os.path.isdir(file_path):
-                    import shutil
-                    shutil.rmtree(file_path)
+                # Step 1: Ingest Agent processing
+                logger.info(f"Orchestrator calling Ingest Agent for {asset_path}...")
+                # Pass the current pipeline_span as the parent
+                processed_ingest_info = self.ingest_agent.ingest_asset_pipeline(asset_path, parent_span=pipeline_span)
+                logger.info(
+                    f"Ingest Agent finished for {asset_path}. Status: {processed_ingest_info.get('status', 'N/A')}")
+                pipeline_span.add_event("ingest_completed", {"status": processed_ingest_info.get('status', 'N/A')})
+
+                if processed_ingest_info.get("status") in ["FAILED_FORMAT_VALIDATION", "FAILED_NORMALIZATION",
+                                                           "DUPLICATE_SKIPPED", "CRITICAL_FAILURE"]:
+                    logger.warning(f"Ingest pipeline failed or skipped for {asset_path}. Skipping QC and Graphics.")
+                    pipeline_span.set_status(trace.StatusCode.ERROR,
+                                             description=f"Ingest failed or skipped: {processed_ingest_info.get('status')}")
+                    return False  # Stop pipeline if ingest failed/skipped
+
+                # Step 2: QC Agent processing
+                logger.info(f"Orchestrator calling QC Agent for {asset_path}...")
+                # Pass the current pipeline_span as the parent
+                qc_result = self.qc_agent.run_qc_checks(processed_ingest_info, parent_span=pipeline_span)
+                logger.info(f"QC Agent finished for {asset_path}. Status: {qc_result.get('qc_status', 'N/A')}")
+                pipeline_span.add_event("qc_completed", {"status": qc_result.get('qc_status', 'N/A')})
+
+                # Merge QC results into the processed_ingest_info for downstream agents
+                processed_ingest_info["metadata"].update({
+                    "qc_status": qc_result.get("qc_status"),
+                    "qc_flags": qc_result.get("qc_flags"),
+                    "qc_timestamp": qc_result.get("qc_timestamp")
+                })
+
+                if qc_result.get("qc_status") == "FAIL":
+                    logger.warning(
+                        f"QC failed for {asset_path}. Graphics and Scheduling might still proceed depending on flags.")
+                    # Do not return False, let it proceed to graphics/scheduling with flags
+                    pipeline_span.set_status(trace.StatusCode.ERROR, description="QC failed.")
+
+                # Step 3: Graphics Agent processing (if not a duplicate or critical failure)
+                logger.info(f"Orchestrator calling Graphics Agent for {asset_path}...")
+                # The GraphicsAgent's receive_metadata expects the full message payload
+                graphics_message_payload = {
+                    "event_type": "METADATA_ENRICHED_FOR_GRAPHICS",
+                    "timestamp": datetime.now().isoformat(),
+                    "asset_id": processed_ingest_info["metadata"].get("checksum_sha256", "N/A"),
+                    "metadata_payload": processed_ingest_info["metadata"]  # Pass the updated metadata
+                }
+                # Graphics Agent doesn't directly take a parent_span in its public method,
+                # but its internal methods should retrieve the current span context.
+                graphics_success = self.graphics_agent.receive_metadata(graphics_message_payload)
+                logger.info(f"Graphics Agent finished for {asset_path}. Success: {graphics_success}")
+                pipeline_span.add_event("graphics_completed", {"success": graphics_success})
+
+                # Step 4: Scheduling Agent processing
+                logger.info(f"Orchestrator calling Scheduling Agent for {asset_path}...")
+                # Scheduling Agent also doesn't directly take a parent_span,
+                # but its internal methods should retrieve the current span context.
+                scheduling_success = self.scheduling_agent.receive_processed_asset_info(processed_ingest_info)
+                logger.info(f"Scheduling Agent finished for {asset_path}. Success: {scheduling_success}")
+                pipeline_span.add_event("scheduling_completed", {"success": scheduling_success})
+
+                self.successful_pipeline_runs += 1
+                pipeline_span.set_status(trace.StatusCode.OK)
+                logger.info(f"--- Pipeline successfully completed for asset: {asset_path} ---")
+                return True
+
             except Exception as e:
-                logger.error(f'Failed to delete {file_path}. Reason: {e}')
-        logger.info(f"Cleaned directory: {directory_path}")
-    else:
-        os.makedirs(directory_path, exist_ok=True)
-        logger.info(f"Created directory: {directory_path}")
+                logger.critical(f"Critical error during pipeline orchestration for {asset_path}: {e}", exc_info=True)
+                pipeline_span.set_status(trace.StatusCode.ERROR, description=f"Orchestration failed: {e}")
+                pipeline_span.record_exception(e)
+                return False
+            finally:
+                # Ensure all spans are flushed at the end of the pipeline run
+                # This is important for ensuring traces are sent to Langfuse
+                provider.force_flush()
 
+    def run_full_test_scenario(self):
+        """
+        Runs a predefined set of test assets through the pipeline.
+        """
+        self._cleanup_directories()
+        logger.info("\n--- Starting Full Pipeline Test Scenario ---")
 
-def setup_initial_environment():
-    """Ensures all necessary directories are clean and ready."""
-    clean_directory("./ingest_source")
-    clean_directory("./ingest_processed")
-    clean_directory("./graphics_output")
-    # Clean agent-specific logs as well for a fresh start
-    # This is the ONLY place where agent logs should be removed to avoid conflicts
-    if os.path.exists("ingest_agent.log"):
-        os.remove("ingest_agent.log")
-        logger.info("Cleaned ingest_agent.log")
-    if os.path.exists("qc_agent.log"):
-        os.remove("qc_agent.log")
-        logger.info("Cleaned qc_agent.log")
-    if os.path.exists("graphics_agent.log"):
-        os.remove("graphics_agent.log")
-        logger.info("Cleaned graphics_agent.log")
-    if os.path.exists("ad_agent.log"):
-        os.remove("ad_agent.log")
-        logger.info("Cleaned ad_agent.log")
-    if os.path.exists("scheduling_agent.log"):  # Added for scheduling agent
-        os.remove("scheduling_agent.log")
-        logger.info("Cleaned scheduling_agent.log")
-    # --- NEW: Also remove the Trulens database file for a clean start ---
-    if os.path.exists("default.sqlite"):
-        os.remove("default.sqlite")
-        logger.info("Cleaned Trulens database: default.sqlite")
+        # Create dummy files for testing
+        # This part is typically handled by a separate script like create_dummy_files.py
+        # For a self-contained orchestrator, we can include simplified creation here.
+        # Ensure ingest_source directory exists
+        os.makedirs(INGEST_CONFIG["watch_folders"][0], exist_ok=True)
 
-
-def simulate_successful_pipeline_scenario(ingest_agent_tru, qc_agent, graphics_agent, ad_agent, scheduling_agent, tru):
-    """
-    Simulates a full end-to-end pipeline run for a successful asset.
-    """
-    logger.info("\n--- Running SUCCESSFUL Pipeline Scenario ---")
-    print("DEBUG: Inside simulate_successful_pipeline_scenario.")
-    sys.stdout.flush()
-
-    # Create a dummy file for ingest
-    file_name = "test_episode_successful.mp4"
-    sidecar_name = "test_episode_successful.json"
-    file_path = os.path.join(INGEST_CONFIG["watch_folders"][0], file_name)
-    sidecar_path = os.path.join(INGEST_CONFIG["watch_folders"][0], sidecar_name)
-
-    # Ensure this dummy file is large enough to pass duration policy
-    simulated_size_mb = 20  # Corresponds to 12 seconds duration (20 * 60 / 100)
-    with open(file_path, "wb") as f:
-        f.write(b"This is a dummy video file content for a successful test." * (1024 * 1024 * simulated_size_mb // 50))
-    metadata = {
-        "title": "The Grand Adventure",
-        "genre": "Fantasy",
-        "language": "English",
-        "ei_rating": "E"
-    }
-    with open(sidecar_path, "w") as f:
-        json.dump(metadata, f, indent=2)
-    logger.info(f"Orchestrator: Created test asset '{file_name}' and its sidecar metadata.")
-    time.sleep(0.5)  # Give file system a moment
-
-    logger.info("\nOrchestrator: Triggering Ingest Agent to process the asset.")
-    print("DEBUG: Calling ingest_agent_tru.ingest_asset_pipeline for successful scenario.")
-    sys.stdout.flush()
-    # Ingest Agent processes the asset
-    with tru.start_recording(ingest_agent_tru) as record_context:  # Re-enabled TruLens recording
-        ingested_asset_info = ingest_agent_tru.ingest_asset_pipeline(file_path)
-
-    print(
-        f"DEBUG: ingest_agent_tru.ingest_asset_pipeline returned: {ingested_asset_info.get('status', 'N/A') if isinstance(ingested_asset_info, dict) else str(ingested_asset_info)}")
-    sys.stdout.flush()
-
-    record_context.update_record(ingested_asset_info)  # Re-enabled record update
-
-    if ingested_asset_info and isinstance(ingested_asset_info, dict) and ingested_asset_info.get(
-            "status") == "COMPLETED":
-        logger.info(
-            f"Orchestrator: Ingest Agent successfully processed '{file_name}'. Status: {ingested_asset_info['status']}.")
-
-        # QC Agent performs checks
-        logger.info("\nOrchestrator: Triggering QC Agent to perform quality checks.")
-        qc_processed_asset_info = qc_agent.perform_qc_checks(ingested_asset_info)
-        logger.info(f"Orchestrator: QC Agent completed checks. Status: {qc_processed_asset_info['qc_status']}.")
-
-        # Graphics Agent receives metadata
-        logger.info("\nOrchestrator: Triggering Graphics Agent to generate graphics.")
-        graphics_message_payload = qc_agent.send_to_graphics_agent(qc_processed_asset_info.get("metadata", {}))
-        graphics_agent.receive_metadata(graphics_message_payload)
-        logger.info("Orchestrator: Graphics Agent processed metadata.")
-
-        # Ad Agent schedules ads (example content schedule)
-        logger.info("\nOrchestrator: Triggering Ad Agent to schedule ads.")
-        sample_content_schedule = [
-            {"content_id": ingested_asset_info["metadata"]["title"], "region": "US", "ad_slot_duration": 30,
-             "target_audience": "general"}
+        test_assets = [
+            # Valid asset
+            {"name": "my_episode_s01e01.mp4",
+             "metadata": {"title": "My First Episode", "genre": "Sci-Fi", "language": "English", "ei_rating": "E"},
+             "size_mb": 20},
+            # Unsupported format
+            {"name": "bad_format_video.avi", "metadata": {}, "size_mb": 1},
+            # Long ad (simulated duration exceeds limit)
+            {"name": "long_ad_campaign_x.mp4",
+             "metadata": {"title": "Long Ad Campaign X", "genre": "Commercial", "language": "English",
+                          "asset_type": "ad"}, "size_mb": 101},
+            # Missing metadata
+            {"name": "ad_missing_meta.mp4", "metadata": {}, "size_mb": 5},
+            # Corrupted header (simulated FFprobe failure)
+            {"name": "corrupted_header.mp4", "metadata": {}, "size_mb": 0.05},
+            # Oversized file (simulated size exceeds limit)
+            {"name": "oversized_file_test.mp4", "metadata": {}, "size_mb": 1},  # Small actual size, but simulated large
+            # Duplicate content (will be skipped after first one is processed)
+            {"name": "duplicate_content_video.mp4",
+             "metadata": {"title": "Duplicate Content", "genre": "Test", "language": "English"}, "size_mb": 10},
+            {"name": "another_copy_of_duplicate.mp4",
+             "metadata": {"title": "Duplicate Content", "genre": "Test", "language": "English"}, "size_mb": 10},
         ]
-        scheduled_ads = ad_agent.schedule_ads(sample_content_schedule)
-        logger.info(f"Orchestrator: Ad Agent scheduled ads: {scheduled_ads}")
 
-        # Scheduling Agent receives processed asset info
-        logger.info("\nOrchestrator: Triggering Scheduling Agent to schedule content.")
-        scheduling_agent.receive_processed_asset_info(ingested_asset_info)
-        logger.info("Orchestrator: Scheduling Agent processed asset info.")
+        # Create dummy files
+        for asset_data in test_assets:
+            file_path = os.path.join(INGEST_CONFIG["watch_folders"][0], asset_data["name"])
+            with open(file_path, "wb") as f:
+                # Write content based on simulated size
+                f.write(b"A" * int(asset_data["size_mb"] * 1024 * 1024))
 
-        logger.info("\nSuccessful Pipeline Scenario Result: SUCCESS")
-        print("DEBUG: simulate_successful_pipeline_scenario returning True.")
-        sys.stdout.flush()
-        return True
-    else:
-        logger.error(
-            f"Orchestrator: Ingest Agent failed or did not complete for {file_name}. Status: {ingested_asset_info.get('status', 'N/A') if isinstance(ingested_asset_info, dict) else str(ingested_asset_info)}. Pipeline aborted for this asset.")
-        logger.info("\nSuccessful Pipeline Scenario Result: FAILURE")
-        print("DEBUG: simulate_successful_pipeline_scenario returning False.")
-        sys.stdout.flush()
-        return False
+            # Create sidecar JSON if metadata is provided
+            if asset_data["metadata"]:
+                sidecar_path = os.path.splitext(file_path)[0] + ".json"
+                with open(sidecar_path, "w") as f:
+                    json.dump(asset_data["metadata"], f, indent=2)
+            logger.info(f"Created dummy file: {asset_data['name']} with size {asset_data['size_mb']}MB")
 
+        logger.info("All dummy files created for test scenario.")
+        time.sleep(1)  # Give a moment for file system to settle
 
-def simulate_error_handling_scenario(ingest_agent_tru, tru):
-    """
-    Simulates a scenario where an asset fails early in the pipeline (e.g., corrupted file).
-    """
-    logger.info("\n--- Running ERROR HANDLING Pipeline Scenario ---")
-    print("DEBUG: Inside simulate_error_handling_scenario.")
-    sys.stdout.flush()
+        # Run each asset through the pipeline
+        for asset_data in test_assets:
+            asset_path = os.path.join(INGEST_CONFIG["watch_folders"][0], asset_data["name"])
+            self.run_pipeline_for_asset(asset_path)
+            time.sleep(0.5)  # Small delay between processing assets
 
-    # Create a dummy corrupted file
-    file_name = "corrupted_header_test.mp4"
-    file_path = os.path.join(INGEST_CONFIG["watch_folders"][0], file_name)
-    with open(file_path, "wb") as f:
-        f.write(os.urandom(50))  # Random bytes to simulate corruption
-    logger.info(f"Orchestrator: Created simulated corrupted asset '{file_name}'.")
-    time.sleep(0.5)
-
-    logger.info("\nOrchestrator: Triggering Ingest Agent to process the corrupted asset (expected to fail).")
-    print("DEBUG: Calling ingest_agent_tru.ingest_asset_pipeline for error handling scenario.")
-    sys.stdout.flush()
-    # Removed TruLens recording for ingest_asset_pipeline
-    with tru.start_recording(ingest_agent_tru) as record_context:  # Re-enabled TruLens recording
-        ingested_asset_info = ingest_agent_tru.ingest_asset_pipeline(file_path)
-
-    print(
-        f"DEBUG: ingest_agent_tru.ingest_asset_pipeline returned: {ingested_asset_info.get('status', 'N/A') if isinstance(ingested_asset_info, dict) else str(ingested_asset_info)}")
-    sys.stdout.flush()
-
-    record_context.update_record(ingested_asset_info)  # Re-enabled record update
-
-    if ingested_asset_info and isinstance(ingested_asset_info, dict) and ingested_asset_info.get(
-            "status") == "FAILED_FORMAT_VALIDATION":
-        logger.info(
-            f"Orchestrator: Ingest Agent correctly reported failure for '{file_name}'. Status: {ingested_asset_info['status']}. This is expected behavior.")
-        logger.info("Orchestrator: **NOT handing off to QC, Graphics, or Scheduling Agents for this failed asset.**")
-        logger.info(f"--- Error Handling Scenario for: {file_name} Completed (Expected Failure Handled) ---")
-        logger.info("\nError Handling Pipeline Scenario Result: SUCCESS (Error Handled)")
-        print("DEBUG: simulate_error_handling_scenario returning True.")
-        sys.stdout.flush()
-        return True
-    else:
-        logger.error(
-            f"Orchestrator: Ingest Agent did NOT correctly handle failure for '{file_name}'. Status: {ingested_asset_info.get('status', 'N/A') if isinstance(ingested_asset_info, dict) else str(ingested_asset_info)}.")
-        logger.info(f"--- Error Handling Scenario for: {file_name} Completed (UNEXPECTED Failure) ---")
-        logger.info("\nError Handling Pipeline Scenario Result: FAILURE (Error Not Handled)")
-        print("DEBUG: simulate_error_handling_scenario returning False.")
-        sys.stdout.flush()
-        return False
+        logger.info("\n--- Full Pipeline Test Scenario Completed ---")
+        logger.info(f"Total pipeline runs: {self.total_pipeline_runs}")
+        logger.info(f"Successful pipeline runs: {self.successful_pipeline_runs}")
+        logger.info("Check Langfuse dashboard for detailed traces.")
 
 
-def simulate_operator_override_scenario(ingest_agent_tru, qc_agent, graphics_agent, ad_agent, scheduling_agent, tru):
-    """
-    Simulates a scenario where an operator override allows a non-compliant asset to proceed.
-    """
-    logger.info("\n--- Running OPERATOR OVERRIDE Pipeline Scenario ---")
-    print("DEBUG: Inside simulate_operator_override_scenario.")
-    sys.stdout.flush()
-
-    # Create a dummy file with an unsupported format but an override flag
-    file_name = "bad_format_video_override.avi"
-    sidecar_name = "bad_format_video_override.json"
-    file_path = os.path.join(INGEST_CONFIG["watch_folders"][0], file_name)
-    sidecar_path = os.path.join(INGEST_CONFIG["watch_folders"][0], sidecar_name)
-
-    with open(file_path, "w") as f:
-        f.write("This is a dummy AVI file, which is not allowed by default policy.")
-    metadata = {
-        "title": "Override Test Video",
-        "genre": "Test",
-        "language": "English",
-        "operator_override_transcode_needed": True  # Operator override flag
-    }
-    with open(sidecar_path, "w") as f:
-        json.dump(metadata, f, indent=2)
-    logger.info(f"Orchestrator: Created test asset '{file_name}' with operator override metadata.")
-    time.sleep(0.5)
-
-    logger.info("\nOrchestrator: Triggering Ingest Agent to process the override asset.")
-    print("DEBUG: Calling ingest_agent_tru.ingest_asset_pipeline for operator override scenario.")
-    sys.stdout.flush()
-    # Removed TruLens recording for ingest_asset_pipeline
-    with tru.start_recording(ingest_agent_tru) as record_context:  # Re-enabled TruLens recording
-        ingested_asset_info = ingest_agent_tru.ingest_asset_pipeline(file_path)
-
-    print(
-        f"DEBUG: ingest_agent_tru.ingest_asset_pipeline returned: {ingested_asset_info.get('status', 'N/A') if isinstance(ingested_asset_info, dict) else str(ingested_asset_info)}")
-    sys.stdout.flush()
-
-    record_context.update_record(ingested_asset_info)  # Re-enabled record update
-
-    # The status for an overridden asset should now be "COMPLETED_WITH_OVERRIDE"
-    if ingested_asset_info and isinstance(ingested_asset_info, dict) and ingested_asset_info.get("status") in [
-        "COMPLETED", "COMPLETED_WITH_OVERRIDE", "COMPLETED_WITH_OVERRIDE_AND_COMPLIANCE_ISSUES"]:
-        logger.info(
-            f"Orchestrator: Ingest Agent successfully processed '{file_name}' with override. Status: {ingested_asset_info['status']}.")
-
-        # QC Agent performs checks
-        logger.info("\nOrchestrator: Triggering QC Agent to perform quality checks.")
-        qc_processed_asset_info = qc_agent.perform_qc_checks(ingested_asset_info)
-        logger.info(f"Orchestrator: QC Agent completed checks. Status: {qc_processed_asset_info['qc_status']}.")
-
-        # Graphics Agent receives metadata
-        logger.info("\nOrchestrator: Triggering Graphics Agent to generate graphics.")
-        graphics_message_payload = qc_agent.send_to_graphics_agent(qc_processed_asset_info.get("metadata", {}))
-        graphics_agent.receive_metadata(graphics_message_payload)
-        logger.info("Orchestrator: Graphics Agent processed metadata.")
-
-        # Ad Agent schedules ads (example content schedule)
-        logger.info("\nOrchestrator: Triggering Ad Agent to schedule ads.")
-        sample_content_schedule = [
-            {"content_id": ingested_asset_info["metadata"]["title"], "region": "US", "ad_slot_duration": 30,
-             "target_audience": "general"}
-        ]
-        scheduled_ads = ad_agent.schedule_ads(sample_content_schedule)
-        logger.info(f"Orchestrator: Ad Agent scheduled ads: {scheduled_ads}")
-
-        # Scheduling Agent receives processed asset info
-        logger.info("\nOrchestrator: Triggering Scheduling Agent to schedule content.")
-        scheduling_agent.receive_processed_asset_info(ingested_asset_info)
-        logger.info("Orchestrator: Scheduling Agent processed asset info.")
-
-        logger.info("\nOperator Override Pipeline Scenario Result: SUCCESS")
-        print("DEBUG: simulate_operator_override_scenario returning True.")
-        sys.stdout.flush()
-        return True
-    else:
-        logger.error(
-            f"Orchestrator: Ingest Agent failed or did not complete for {file_name}. Status: {ingested_asset_info.get('status', 'N/A') if isinstance(ingested_asset_info, dict) else str(ingested_asset_info)}. Pipeline aborted for this asset.")
-        logger.info("\nOperator Override Pipeline Scenario Result: FAILURE")
-        print("DEBUG: simulate_operator_override_scenario returning False.")
-        sys.stdout.flush()
-        return False
-
-
-# --- Main Orchestration Logic ---
 if __name__ == "__main__":
-    try:  # Added a try-except block to catch top-level exceptions
-        logger.info("Pipeline Orchestrator initialized. Agents are ready.")
+    orchestrator = PipelineOrchestrator()
+    orchestrator.run_full_test_scenario()
 
-        # --- IMPORTANT: Clean environment BEFORE initializing agents to ensure Trulens starts fresh ---
-        setup_initial_environment()
-
-        # --- NEW: Initialize Tru here, after cleanup ---
-        global tru  # Declare tru as global here
-        tru = TruSession()
-        logger.info("Initialized Trulens database after cleanup.")
-        print("DEBUG: Tru instance initialized. Proceeding to agent initialization.")
-        sys.stdout.flush()  # Flush stdout
-
-        # Initialize agents
-        print("DEBUG: Attempting to initialize IngestAgent...")
-        sys.stdout.flush()  # Flush stdout
-        logger.debug("Orchestrator: Initializing IngestAgent...")
-        ingest_agent = IngestAgent(INGEST_CONFIG)
-        print("DEBUG: IngestAgent initialized successfully.")
-        sys.stdout.flush()  # Flush stdout
-        logger.debug("Orchestrator: IngestAgent initialized.")
-
-        # --- TEMPORARY: Test direct Gemini API call without TruLens instrumentation ---
-        print("\nDEBUG: --- STARTING DIRECT GEMINI API TEST ---")
-        sys.stdout.flush()
-        test_prompt = "Say hello in one word."
-        print(f"DEBUG: Calling ingest_agent._call_gemini_api with prompt: '{test_prompt}'")
-        sys.stdout.flush()
-        direct_gemini_response = ingest_agent._call_gemini_api(test_prompt)
-        print(f"DEBUG: Direct Gemini API response: '{direct_gemini_response}'")
-        sys.stdout.flush()
-        print("DEBUG: --- ENDING DIRECT GEMINI API TEST ---\n")
-        sys.stdout.flush()
-        # --- END TEMPORARY TEST ---
-
-        # --- Use the raw IngestAgent instance directly, bypassing TruLens wrapping for now ---
-        # Re-enabled TruCustomApp wrapping for ingest_agent
-        ingest_agent_tru = TruApp(ingest_agent, app_id="IngestAgentPipeline")  # Changed to TruApp
-        logger.info("IngestAgent instance wrapped with TruApp for instrumentation.")
-
-        print("DEBUG: Attempting to initialize QCAgent...")
-        sys.stdout.flush()  # Flush stdout
-        logger.debug("Orchestrator: Initializing QCAgent...")
-        qc_agent = QCAgent()
-        print("DEBUG: QCAgent initialized successfully.")
-        sys.stdout.flush()  # Flush stdout
-        logger.debug("Orchestrator: QCAgent initialized.")
-
-        print("DEBUG: Attempting to initialize GraphicsAgent...")
-        sys.stdout.flush()  # Flush stdout
-        logger.debug("Orchestrator: Initializing GraphicsAgent...")
-        graphics_agent = GraphicsAgent()
-        print("DEBUG: GraphicsAgent initialized successfully.")
-        sys.stdout.flush()  # Flush stdout
-        logger.debug("Orchestrator: GraphicsAgent initialized.")
-
-        print("DEBUG: Attempting to initialize AdAgent...")
-        sys.stdout.flush()  # Flush stdout
-        logger.debug("Orchestrator: Initializing AdAgent...")
-        # Now calling static methods directly on the class
-        ad_blocks_data = AdAgent._get_ad_blocks()
-        regional_revenue_data = AdAgent._simulate_regional_revenue_data()
-        ad_agent = AdAgent(ad_blocks_data=ad_blocks_data, regional_revenue_data=regional_revenue_data)
-        print("DEBUG: AdAgent initialized successfully.")
-        sys.stdout.flush()  # Flush stdout
-        logger.debug("Orchestrator: AdAgent initialized.")
-
-        print("DEBUG: Attempting to initialize SchedulingAgent...")
-        sys.stdout.flush()  # Flush stdout
-        logger.debug("Orchestrator: Initializing SchedulingAgent...")
-        scheduling_agent = SchedulingAgent(config={"scheduling_window_days": 7})  # Pass config
-        print("DEBUG: SchedulingAgent initialized successfully.")
-        sys.stdout.flush()  # Flush stdout
-        logger.debug("Orchestrator: SchedulingAgent initialized.")
-
-        print("DEBUG: All agents initialized. Starting scenario simulations.")
-        sys.stdout.flush()  # Flush stdout
-        logger.debug("Orchestrator: Starting scenario simulations.")
-
-        print("DEBUG: About to call simulate_successful_pipeline_scenario.")  # NEW DIAGNOSTIC PRINT
-        sys.stdout.flush()
-
-        # Run scenarios
-        scenario_results = {}
-        # Pass the raw agent instance to the simulation functions
-        scenario_results["successful_pipeline"] = simulate_successful_pipeline_scenario(ingest_agent_tru, qc_agent,
-                                                                                        graphics_agent, ad_agent,
-                                                                                        scheduling_agent, tru)
-        print(f"DEBUG: simulate_successful_pipeline_scenario returned: {scenario_results['successful_pipeline']}")
-        sys.stdout.flush()
-
-        print("DEBUG: Calling simulate_error_handling_scenario...")
-        sys.stdout.flush()
-        scenario_results["error_handling_pipeline"] = simulate_error_handling_scenario(ingest_agent_tru, tru)
-        print(f"DEBUG: simulate_error_handling_scenario returned: {scenario_results['error_handling_pipeline']}")
-        sys.stdout.flush()
-
-        print("DEBUG: Calling simulate_operator_override_scenario...")
-        sys.stdout.flush()
-        scenario_results["operator_override_pipeline"] = simulate_operator_override_scenario(ingest_agent_tru, qc_agent,
-                                                                                             graphics_agent, ad_agent,
-                                                                                             scheduling_agent, tru)
-        print(f"DEBUG: simulate_operator_override_scenario returned: {scenario_results['operator_override_pipeline']}")
-        sys.stdout.flush()
-
-        print("\n--- All Pipeline Scenarios Completed ---")
-        sys.stdout.flush()  # Flush stdout
-        for scenario, result in scenario_results.items():
-            logger.info(f"{scenario}: {'SUCCESS' if result else 'FAILURE'}")
-
-        # --- Continuous Monitoring for Trulens Logging ---
-        # This section will run the IngestAgent's monitoring loop for a short period
-        # to ensure Trulens has time to log multiple LLM calls.
-        logger.info("\n--- Starting continuous monitoring for Trulens logging (approx. 30 seconds) ---")
-        monitor_duration = 30  # seconds
-        start_time = time.time()
-
-        # Create some dummy files to be processed during monitoring
-        clean_directory("./ingest_source")  # This will clear the ingest_source again
-        for i in range(5):  # Create 5 files
-            file_name = f"monitor_test_file_{i}.mp4"
-            sidecar_name = f"monitor_test_file_{i}.json"
-            file_path = os.path.join(INGEST_CONFIG["watch_folders"][0], file_name)
-            sidecar_path = os.path.join(INGEST_CONFIG["watch_folders"][0], sidecar_name)
-            with open(file_path, "w") as f:
-                f.write(f"This is dummy content for monitor test file {i}.")
-            metadata = {
-                "title": f"Monitor Test Episode {i}",
-                "genre": "Documentary",
-                "language": "English",
-                "ei_rating": "G"
-            }
-            with open(sidecar_path, "w") as f:
-                json.dump(metadata, f, indent=2)
-            logger.info(f"Created monitor test file: {file_name}")
-
-        # Re-enabled TruLens recording for the continuous monitoring loop
-        end_monitor_time = time.time() + monitor_duration
-        while time.time() < end_monitor_time:
-            for folder in ingest_agent.config["watch_folders"]:
-                new_assets = ingest_agent_tru.asset_acquisition(folder)  # Use the TruLens-wrapped agent
-                for asset_path in new_assets:
-                    with tru.start_recording(ingest_agent_tru) as record_context:  # Re-enabled TruLens recording
-                        ingested_asset_info = ingest_agent_tru.ingest_asset_pipeline(asset_path)
-                    record_context.update_record(ingested_asset_info)  # Re-enabled record update
-            time.sleep(INGEST_CONFIG["policies"]["min_duration_seconds"] / 2)  # Shorter sleep for more frequent scans
-
-        logger.info(f"--- Continuous monitoring finished after {monitor_duration} seconds ---")
-        sys.stdout.flush()  # Flush stdout
-
-        # Give Trulens a moment to write any final buffered data
-        logger.info("Giving Trulens a moment to finalize database writes...")
-        sys.stdout.flush()  # Flush stdout
-        time.sleep(5)  # Increased sleep for better chances of Trulens logging
-
-        logger.info("\n--- Orchestration Finished ---")
-        sys.stdout.flush()  # Flush stdout
-        ingest_agent._report_kpis()  # Report KPIs at the end of the orchestration
-
-        # Run the TruLens dashboard
-        logger.info("\n--- Starting TruLens Dashboard ---")
-        sys.stdout.flush()  # Flush stdout
-        tru.run_dashboard()  # This will launch the UI in your browser
-        logger.info("TruLens Dashboard started. Open your browser to view results.")
-        sys.stdout.flush()  # Flush stdout
-
-    except Exception as e:
-        logger.critical(f"An unhandled error occurred during orchestration: {e}", exc_info=True)
-        # Ensure logs are flushed even on critical errors
-        logging.shutdown()
-        sys.exit(1)  # Explicitly exit with an error code
-
+    # Ensure all spans are flushed before exiting the program
+    trace.get_tracer_provider().force_flush()
+    logging.shutdown()  # Properly shut down logging

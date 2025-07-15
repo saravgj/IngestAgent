@@ -1,9 +1,95 @@
-2025-07-14 20:00:15,694 - PipelineOrchestrator - INFO - Pipeline Orchestrator initialized. Agents are ready.
-2025-07-14 20:00:15,699 - PipelineOrchestrator - INFO - Cleaned directory: ./ingest_source
-2025-07-14 20:00:15,699 - PipelineOrchestrator - INFO - Cleaned directory: ./ingest_processed
-2025-07-14 20:00:15,700 - PipelineOrchestrator - INFO - Cleaned directory: ./graphics_output
-2025-07-14 20:00:15,700 - PipelineOrchestrator - INFO - Cleaned ingest_agent.log
-2025-07-14 20:00:15,701 - PipelineOrchestrator - INFO - Cleaned qc_agent.log
-2025-07-14 20:00:15,701 - PipelineOrchestrator - INFO - Cleaned graphics_agent.log
-2025-07-14 20:00:15,701 - PipelineOrchestrator - INFO - Cleaned scheduling_agent.log
-2025-07-14 20:00:15,703 - PipelineOrchestrator - INFO - Cleaned Trulens database: default.sqlite
+2025-07-15 12:40:12,643 - PipelineOrchestrator - INFO - Setting up OTLPSpanExporter for Langfuse in Orchestrator.
+2025-07-15 12:40:12,654 - PipelineOrchestrator - INFO - OpenTelemetry TracerProvider globally configured by Orchestrator.
+2025-07-15 12:40:12,656 - PipelineOrchestrator - INFO - Pipeline Orchestrator initialized with all agents.
+2025-07-15 12:40:12,666 - PipelineOrchestrator - INFO - Cleaned up directory: ./ingest_source
+2025-07-15 12:40:12,667 - PipelineOrchestrator - INFO - Recreated empty directory: ./ingest_source
+2025-07-15 12:40:12,716 - PipelineOrchestrator - INFO - Cleaned up directory: ./ingest_processed
+2025-07-15 12:40:12,717 - PipelineOrchestrator - INFO - Recreated empty directory: ./ingest_processed
+2025-07-15 12:40:12,717 - PipelineOrchestrator - INFO - 
+--- Starting Full Pipeline Test Scenario ---
+2025-07-15 12:40:12,838 - PipelineOrchestrator - INFO - Created dummy file: my_episode_s01e01.mp4 with size 20MB
+2025-07-15 12:40:12,841 - PipelineOrchestrator - INFO - Created dummy file: bad_format_video.avi with size 1MB
+2025-07-15 12:40:13,452 - PipelineOrchestrator - INFO - Created dummy file: long_ad_campaign_x.mp4 with size 101MB
+2025-07-15 12:40:13,501 - PipelineOrchestrator - INFO - Created dummy file: ad_missing_meta.mp4 with size 5MB
+2025-07-15 12:40:13,502 - PipelineOrchestrator - INFO - Created dummy file: corrupted_header.mp4 with size 0.05MB
+2025-07-15 12:40:13,503 - PipelineOrchestrator - INFO - Created dummy file: oversized_file_test.mp4 with size 1MB
+2025-07-15 12:40:13,568 - PipelineOrchestrator - INFO - Created dummy file: duplicate_content_video.mp4 with size 10MB
+2025-07-15 12:40:13,649 - PipelineOrchestrator - INFO - Created dummy file: another_copy_of_duplicate.mp4 with size 10MB
+2025-07-15 12:40:13,649 - PipelineOrchestrator - INFO - All dummy files created for test scenario.
+2025-07-15 12:40:14,656 - PipelineOrchestrator - INFO - 
+--- Orchestrating pipeline for asset: ./ingest_source/my_episode_s01e01.mp4 ---
+2025-07-15 12:40:14,670 - PipelineOrchestrator - DEBUG - Thought Chain: Starting new pipeline run trace for ./ingest_source/my_episode_s01e01.mp4.
+2025-07-15 12:40:14,670 - PipelineOrchestrator - INFO - Orchestrator calling Ingest Agent for ./ingest_source/my_episode_s01e01.mp4...
+2025-07-15 12:40:22,581 - PipelineOrchestrator - INFO - Ingest Agent finished for ./ingest_source/my_episode_s01e01.mp4. Status: COMPLETED
+2025-07-15 12:40:22,595 - PipelineOrchestrator - INFO - Orchestrator calling QC Agent for ./ingest_source/my_episode_s01e01.mp4...
+2025-07-15 12:40:22,601 - PipelineOrchestrator - INFO - QC Agent finished for ./ingest_source/my_episode_s01e01.mp4. Status: PASS
+2025-07-15 12:40:22,601 - PipelineOrchestrator - INFO - Orchestrator calling Graphics Agent for ./ingest_source/my_episode_s01e01.mp4...
+2025-07-15 12:40:22,699 - PipelineOrchestrator - INFO - Graphics Agent finished for ./ingest_source/my_episode_s01e01.mp4. Success: True
+2025-07-15 12:40:22,699 - PipelineOrchestrator - INFO - Orchestrator calling Scheduling Agent for ./ingest_source/my_episode_s01e01.mp4...
+2025-07-15 12:40:22,844 - PipelineOrchestrator - INFO - Scheduling Agent finished for ./ingest_source/my_episode_s01e01.mp4. Success: True
+2025-07-15 12:40:22,845 - PipelineOrchestrator - INFO - --- Pipeline successfully completed for asset: ./ingest_source/my_episode_s01e01.mp4 ---
+2025-07-15 12:40:23,351 - PipelineOrchestrator - INFO - 
+--- Orchestrating pipeline for asset: ./ingest_source/bad_format_video.avi ---
+2025-07-15 12:40:23,351 - PipelineOrchestrator - DEBUG - Thought Chain: Starting new pipeline run trace for ./ingest_source/bad_format_video.avi.
+2025-07-15 12:40:23,352 - PipelineOrchestrator - INFO - Orchestrator calling Ingest Agent for ./ingest_source/bad_format_video.avi...
+2025-07-15 12:40:28,830 - PipelineOrchestrator - INFO - Ingest Agent finished for ./ingest_source/bad_format_video.avi. Status: CRITICAL_FAILURE
+2025-07-15 12:40:28,830 - PipelineOrchestrator - WARNING - Ingest pipeline failed or skipped for ./ingest_source/bad_format_video.avi. Skipping QC and Graphics.
+2025-07-15 12:40:29,334 - PipelineOrchestrator - INFO - 
+--- Orchestrating pipeline for asset: ./ingest_source/long_ad_campaign_x.mp4 ---
+2025-07-15 12:40:29,334 - PipelineOrchestrator - DEBUG - Thought Chain: Starting new pipeline run trace for ./ingest_source/long_ad_campaign_x.mp4.
+2025-07-15 12:40:29,335 - PipelineOrchestrator - INFO - Orchestrator calling Ingest Agent for ./ingest_source/long_ad_campaign_x.mp4...
+2025-07-15 12:40:36,694 - PipelineOrchestrator - INFO - Ingest Agent finished for ./ingest_source/long_ad_campaign_x.mp4. Status: FAILED_COMPLIANCE
+2025-07-15 12:40:36,694 - PipelineOrchestrator - INFO - Orchestrator calling QC Agent for ./ingest_source/long_ad_campaign_x.mp4...
+2025-07-15 12:40:36,698 - PipelineOrchestrator - INFO - QC Agent finished for ./ingest_source/long_ad_campaign_x.mp4. Status: PASS
+2025-07-15 12:40:36,699 - PipelineOrchestrator - INFO - Orchestrator calling Graphics Agent for ./ingest_source/long_ad_campaign_x.mp4...
+2025-07-15 12:40:36,794 - PipelineOrchestrator - INFO - Graphics Agent finished for ./ingest_source/long_ad_campaign_x.mp4. Success: True
+2025-07-15 12:40:36,794 - PipelineOrchestrator - INFO - Orchestrator calling Scheduling Agent for ./ingest_source/long_ad_campaign_x.mp4...
+2025-07-15 12:40:36,900 - PipelineOrchestrator - INFO - Scheduling Agent finished for ./ingest_source/long_ad_campaign_x.mp4. Success: True
+2025-07-15 12:40:36,900 - PipelineOrchestrator - INFO - --- Pipeline successfully completed for asset: ./ingest_source/long_ad_campaign_x.mp4 ---
+2025-07-15 12:40:37,406 - PipelineOrchestrator - INFO - 
+--- Orchestrating pipeline for asset: ./ingest_source/ad_missing_meta.mp4 ---
+2025-07-15 12:40:37,406 - PipelineOrchestrator - DEBUG - Thought Chain: Starting new pipeline run trace for ./ingest_source/ad_missing_meta.mp4.
+2025-07-15 12:40:37,407 - PipelineOrchestrator - INFO - Orchestrator calling Ingest Agent for ./ingest_source/ad_missing_meta.mp4...
+2025-07-15 12:40:40,404 - PipelineOrchestrator - INFO - Ingest Agent finished for ./ingest_source/ad_missing_meta.mp4. Status: FAILED_COMPLIANCE
+2025-07-15 12:40:40,404 - PipelineOrchestrator - INFO - Orchestrator calling QC Agent for ./ingest_source/ad_missing_meta.mp4...
+2025-07-15 12:40:40,409 - PipelineOrchestrator - INFO - QC Agent finished for ./ingest_source/ad_missing_meta.mp4. Status: PASS
+2025-07-15 12:40:40,409 - PipelineOrchestrator - INFO - Orchestrator calling Graphics Agent for ./ingest_source/ad_missing_meta.mp4...
+2025-07-15 12:40:40,502 - PipelineOrchestrator - INFO - Graphics Agent finished for ./ingest_source/ad_missing_meta.mp4. Success: True
+2025-07-15 12:40:40,502 - PipelineOrchestrator - INFO - Orchestrator calling Scheduling Agent for ./ingest_source/ad_missing_meta.mp4...
+2025-07-15 12:40:40,607 - PipelineOrchestrator - INFO - Scheduling Agent finished for ./ingest_source/ad_missing_meta.mp4. Success: True
+2025-07-15 12:40:40,608 - PipelineOrchestrator - INFO - --- Pipeline successfully completed for asset: ./ingest_source/ad_missing_meta.mp4 ---
+2025-07-15 12:40:41,110 - PipelineOrchestrator - INFO - 
+--- Orchestrating pipeline for asset: ./ingest_source/corrupted_header.mp4 ---
+2025-07-15 12:40:41,110 - PipelineOrchestrator - DEBUG - Thought Chain: Starting new pipeline run trace for ./ingest_source/corrupted_header.mp4.
+2025-07-15 12:40:41,111 - PipelineOrchestrator - INFO - Orchestrator calling Ingest Agent for ./ingest_source/corrupted_header.mp4...
+2025-07-15 12:40:41,118 - PipelineOrchestrator - INFO - Ingest Agent finished for ./ingest_source/corrupted_header.mp4. Status: FAILED_FORMAT_VALIDATION
+2025-07-15 12:40:41,118 - PipelineOrchestrator - WARNING - Ingest pipeline failed or skipped for ./ingest_source/corrupted_header.mp4. Skipping QC and Graphics.
+2025-07-15 12:40:41,619 - PipelineOrchestrator - INFO - 
+--- Orchestrating pipeline for asset: ./ingest_source/oversized_file_test.mp4 ---
+2025-07-15 12:40:41,620 - PipelineOrchestrator - DEBUG - Thought Chain: Starting new pipeline run trace for ./ingest_source/oversized_file_test.mp4.
+2025-07-15 12:40:41,620 - PipelineOrchestrator - INFO - Orchestrator calling Ingest Agent for ./ingest_source/oversized_file_test.mp4...
+2025-07-15 12:40:45,936 - PipelineOrchestrator - INFO - Ingest Agent finished for ./ingest_source/oversized_file_test.mp4. Status: DUPLICATE_SKIPPED
+2025-07-15 12:40:45,936 - PipelineOrchestrator - WARNING - Ingest pipeline failed or skipped for ./ingest_source/oversized_file_test.mp4. Skipping QC and Graphics.
+2025-07-15 12:40:46,447 - PipelineOrchestrator - INFO - 
+--- Orchestrating pipeline for asset: ./ingest_source/duplicate_content_video.mp4 ---
+2025-07-15 12:40:46,447 - PipelineOrchestrator - DEBUG - Thought Chain: Starting new pipeline run trace for ./ingest_source/duplicate_content_video.mp4.
+2025-07-15 12:40:46,448 - PipelineOrchestrator - INFO - Orchestrator calling Ingest Agent for ./ingest_source/duplicate_content_video.mp4...
+2025-07-15 12:40:49,962 - PipelineOrchestrator - INFO - Ingest Agent finished for ./ingest_source/duplicate_content_video.mp4. Status: FAILED_COMPLIANCE
+2025-07-15 12:40:49,963 - PipelineOrchestrator - INFO - Orchestrator calling QC Agent for ./ingest_source/duplicate_content_video.mp4...
+2025-07-15 12:40:49,968 - PipelineOrchestrator - INFO - QC Agent finished for ./ingest_source/duplicate_content_video.mp4. Status: PASS
+2025-07-15 12:40:49,968 - PipelineOrchestrator - INFO - Orchestrator calling Graphics Agent for ./ingest_source/duplicate_content_video.mp4...
+2025-07-15 12:40:50,066 - PipelineOrchestrator - INFO - Graphics Agent finished for ./ingest_source/duplicate_content_video.mp4. Success: True
+2025-07-15 12:40:50,066 - PipelineOrchestrator - INFO - Orchestrator calling Scheduling Agent for ./ingest_source/duplicate_content_video.mp4...
+2025-07-15 12:40:50,168 - PipelineOrchestrator - INFO - Scheduling Agent finished for ./ingest_source/duplicate_content_video.mp4. Success: True
+2025-07-15 12:40:50,168 - PipelineOrchestrator - INFO - --- Pipeline successfully completed for asset: ./ingest_source/duplicate_content_video.mp4 ---
+2025-07-15 12:40:50,673 - PipelineOrchestrator - INFO - 
+--- Orchestrating pipeline for asset: ./ingest_source/another_copy_of_duplicate.mp4 ---
+2025-07-15 12:40:50,674 - PipelineOrchestrator - DEBUG - Thought Chain: Starting new pipeline run trace for ./ingest_source/another_copy_of_duplicate.mp4.
+2025-07-15 12:40:50,675 - PipelineOrchestrator - INFO - Orchestrator calling Ingest Agent for ./ingest_source/another_copy_of_duplicate.mp4...
+2025-07-15 12:40:54,934 - PipelineOrchestrator - INFO - Ingest Agent finished for ./ingest_source/another_copy_of_duplicate.mp4. Status: DUPLICATE_SKIPPED
+2025-07-15 12:40:54,934 - PipelineOrchestrator - WARNING - Ingest pipeline failed or skipped for ./ingest_source/another_copy_of_duplicate.mp4. Skipping QC and Graphics.
+2025-07-15 12:40:55,440 - PipelineOrchestrator - INFO - 
+--- Full Pipeline Test Scenario Completed ---
+2025-07-15 12:40:55,441 - PipelineOrchestrator - INFO - Total pipeline runs: 8
+2025-07-15 12:40:55,441 - PipelineOrchestrator - INFO - Successful pipeline runs: 4
+2025-07-15 12:40:55,441 - PipelineOrchestrator - INFO - Check Langfuse dashboard for detailed traces.
