@@ -1,3 +1,23 @@
+from langfuse import Langfuse
+
+langfuse = Langfuse(
+  secret_key="sk-lf-ad126451-35c2-438b-9ae6-72b5e5376270",
+  public_key="pk-lf-b9a5480d-3e5e-4330-924c-eeda46ea1db6",
+  host="https://us.cloud.langfuse.com"
+)
+
+import os
+import base64
+
+public = "pk-lf-b9a5480d-3e5e-4330-924c-eeda46ea1db6"
+secret = "sk-lf-ad126451-35c2-438b-9ae6-72b5e5376270"
+auth_string = f"{public}:{secret}"
+LANGFUSE_AUTH = base64.b64encode(auth_string.encode()).decode()
+
+os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] = "https://otlp.us.cloud.langfuse.com"
+os.environ["OTEL_EXPORTER_OTLP_HEADERS"] = f"Authorization=Basic {LANGFUSE_AUTH}"
+os.environ["OTEL_EXPORTER_OTLP_PROTOCOL"] = "http/protobuf"
+
 import os
 import json
 import hashlib
@@ -1239,4 +1259,3 @@ if __name__ == "__main__":
     logger.info(f"Check '{CONFIG['log_file']}' for detailed logs and '{CONFIG['output_folder']}' for processed files.")
 
     agent._report_kpis()  # Call for standalone report
-

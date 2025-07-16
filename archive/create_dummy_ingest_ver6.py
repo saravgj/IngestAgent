@@ -2,7 +2,7 @@ import os
 import json
 
 # Define the base directory for ingest source files
-INGEST_SOURCE_DIR = "./ingest_source"
+INGEST_SOURCE_DIR = "../ingest_source"
 
 # Ensure the ingest_source directory exists
 os.makedirs(INGEST_SOURCE_DIR, exist_ok=True)

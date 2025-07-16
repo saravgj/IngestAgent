@@ -1,22 +1,22 @@
-2025-07-15 12:40:12,655 - QCAgent - INFO - QC Agent initialized.
-2025-07-15 12:40:12,656 - QCAgent - INFO - QC Agent instance fully initialized and ready with OpenTelemetry tracer.
-2025-07-15 12:40:22,596 - QCAgent - INFO - QC Agent received asset for QC: My First Episode
-2025-07-15 12:40:22,597 - QCAgent - INFO - Starting QC checks for asset: My First Episode
-2025-07-15 12:40:22,597 - QCAgent - DEBUG - Thought Chain: Initiating QC checks based on asset info.
-2025-07-15 12:40:22,600 - QCAgent - INFO - QC completed with status 'PASS' for My First Episode.
-2025-07-15 12:40:22,600 - QCAgent - DEBUG - Thought Chain: QC completed successfully.
-2025-07-15 12:40:36,695 - QCAgent - INFO - QC Agent received asset for QC: Long Ad Campaign X
-2025-07-15 12:40:36,695 - QCAgent - INFO - Starting QC checks for asset: Long Ad Campaign X
-2025-07-15 12:40:36,695 - QCAgent - DEBUG - Thought Chain: Initiating QC checks based on asset info.
-2025-07-15 12:40:36,698 - QCAgent - INFO - QC completed with status 'PASS' for Long Ad Campaign X.
-2025-07-15 12:40:36,698 - QCAgent - DEBUG - Thought Chain: QC completed successfully.
-2025-07-15 12:40:40,404 - QCAgent - INFO - QC Agent received asset for QC: Ad Missing Meta
-2025-07-15 12:40:40,404 - QCAgent - INFO - Starting QC checks for asset: Ad Missing Meta
-2025-07-15 12:40:40,404 - QCAgent - DEBUG - Thought Chain: Initiating QC checks based on asset info.
-2025-07-15 12:40:40,407 - QCAgent - INFO - QC completed with status 'PASS' for Ad Missing Meta.
-2025-07-15 12:40:40,407 - QCAgent - DEBUG - Thought Chain: QC completed successfully.
-2025-07-15 12:40:49,963 - QCAgent - INFO - QC Agent received asset for QC: Duplicate Content
-2025-07-15 12:40:49,963 - QCAgent - INFO - Starting QC checks for asset: Duplicate Content
-2025-07-15 12:40:49,964 - QCAgent - DEBUG - Thought Chain: Initiating QC checks based on asset info.
-2025-07-15 12:40:49,967 - QCAgent - INFO - QC completed with status 'PASS' for Duplicate Content.
-2025-07-15 12:40:49,967 - QCAgent - DEBUG - Thought Chain: QC completed successfully.
+2025-07-16 11:16:02,477 - QCAgent - INFO - QC Agent initialized.
+2025-07-16 11:16:02,477 - QCAgent - INFO - QC Agent instance fully initialized and ready with OpenTelemetry tracer.
+2025-07-16 11:16:08,168 - QCAgent - INFO - QC Agent received asset for QC: My First Episode
+2025-07-16 11:16:08,168 - QCAgent - INFO - Starting QC checks for asset: My First Episode
+2025-07-16 11:16:08,168 - QCAgent - DEBUG - Thought Chain: Initiating QC checks based on asset info.
+2025-07-16 11:16:08,170 - QCAgent - INFO - QC completed with status 'PASS' for My First Episode.
+2025-07-16 11:16:08,171 - QCAgent - DEBUG - Thought Chain: QC completed successfully.
+2025-07-16 11:16:20,870 - QCAgent - INFO - QC Agent received asset for QC: Long Ad Campaign X
+2025-07-16 11:16:20,871 - QCAgent - INFO - Starting QC checks for asset: Long Ad Campaign X
+2025-07-16 11:16:20,871 - QCAgent - DEBUG - Thought Chain: Initiating QC checks based on asset info.
+2025-07-16 11:16:20,874 - QCAgent - INFO - QC completed with status 'PASS' for Long Ad Campaign X.
+2025-07-16 11:16:20,875 - QCAgent - DEBUG - Thought Chain: QC completed successfully.
+2025-07-16 11:16:24,550 - QCAgent - INFO - QC Agent received asset for QC: Ad Missing Meta
+2025-07-16 11:16:24,550 - QCAgent - INFO - Starting QC checks for asset: Ad Missing Meta
+2025-07-16 11:16:24,550 - QCAgent - DEBUG - Thought Chain: Initiating QC checks based on asset info.
+2025-07-16 11:16:24,551 - QCAgent - INFO - QC completed with status 'PASS' for Ad Missing Meta.
+2025-07-16 11:16:24,551 - QCAgent - DEBUG - Thought Chain: QC completed successfully.
+2025-07-16 11:16:35,186 - QCAgent - INFO - QC Agent received asset for QC: Duplicate Content
+2025-07-16 11:16:35,187 - QCAgent - INFO - Starting QC checks for asset: Duplicate Content
+2025-07-16 11:16:35,187 - QCAgent - DEBUG - Thought Chain: Initiating QC checks based on asset info.
+2025-07-16 11:16:35,189 - QCAgent - INFO - QC completed with status 'PASS' for Duplicate Content.
+2025-07-16 11:16:35,189 - QCAgent - DEBUG - Thought Chain: QC completed successfully.

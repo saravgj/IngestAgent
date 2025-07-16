@@ -1,25 +1,25 @@
-2025-07-15 12:40:12,656 - SchedulingAgent - INFO - Scheduling Agent initialized.
-2025-07-15 12:40:22,699 - SchedulingAgent - INFO - Scheduling Agent received processed asset info for: My First Episode
-2025-07-15 12:40:22,699 - SchedulingAgent - DEBUG - Thought Chain: Analyzing received asset info for scheduling decisions.
-2025-07-15 12:40:22,699 - SchedulingAgent - DEBUG - Thought Chain: Not attempting to read or download file from './ingest_processed/asset_b3d3b477_my_first_episode.mp4'. This is Ingest Agent's role.
-2025-07-15 12:40:22,742 - SchedulingAgent - DEBUG - Thought Chain: Scheduling content 'My First Episode' for future slot.
-2025-07-15 12:40:22,743 - SchedulingAgent - INFO - Asset 'My First Episode' (ID: 3e872f2c5008f32b024a9cb02112280e7ef9e2f1bb54a417f685dd96537fa504) successfully scheduled for 2025-07-17 11:14:22.
-2025-07-15 12:40:22,743 - SchedulingAgent - DEBUG - Thought Chain: Scheduling decision complete for asset 'My First Episode'.
-2025-07-15 12:40:36,794 - SchedulingAgent - INFO - Scheduling Agent received processed asset info for: Long Ad Campaign X
-2025-07-15 12:40:36,794 - SchedulingAgent - DEBUG - Thought Chain: Analyzing received asset info for scheduling decisions.
-2025-07-15 12:40:36,794 - SchedulingAgent - DEBUG - Thought Chain: Not attempting to read or download file from './ingest_processed/asset_b1e2f6ec_long_ad_campaign_x.mp4'. This is Ingest Agent's role.
-2025-07-15 12:40:36,795 - SchedulingAgent - DEBUG - Thought Chain: Scheduling ad 'Long Ad Campaign X' for immediate availability.
-2025-07-15 12:40:36,795 - SchedulingAgent - INFO - Asset 'Long Ad Campaign X' (ID: 3c195a0507198c7574551ae014247153b20bac784cf0a5c3b1fa5038c2900093) successfully scheduled for 2025-07-15 13:11:36.
-2025-07-15 12:40:36,795 - SchedulingAgent - DEBUG - Thought Chain: Scheduling decision complete for asset 'Long Ad Campaign X'.
-2025-07-15 12:40:40,502 - SchedulingAgent - INFO - Scheduling Agent received processed asset info for: Ad Missing Meta
-2025-07-15 12:40:40,503 - SchedulingAgent - DEBUG - Thought Chain: Analyzing received asset info for scheduling decisions.
-2025-07-15 12:40:40,503 - SchedulingAgent - DEBUG - Thought Chain: Not attempting to read or download file from './ingest_processed/asset_528237c3_ad_missing_meta.mp4'. This is Ingest Agent's role.
-2025-07-15 12:40:40,504 - SchedulingAgent - DEBUG - Thought Chain: Scheduling ad 'Ad Missing Meta' for immediate availability.
-2025-07-15 12:40:40,504 - SchedulingAgent - INFO - Asset 'Ad Missing Meta' (ID: dbbe5517996826bd5861ac22b745d21d11219055d89243ca1aea0ad31f552b12) successfully scheduled for 2025-07-15 13:06:40.
-2025-07-15 12:40:40,504 - SchedulingAgent - DEBUG - Thought Chain: Scheduling decision complete for asset 'Ad Missing Meta'.
-2025-07-15 12:40:50,066 - SchedulingAgent - INFO - Scheduling Agent received processed asset info for: Duplicate Content
-2025-07-15 12:40:50,066 - SchedulingAgent - DEBUG - Thought Chain: Analyzing received asset info for scheduling decisions.
-2025-07-15 12:40:50,066 - SchedulingAgent - DEBUG - Thought Chain: Not attempting to read or download file from './ingest_processed/asset_899e72b2_duplicate_content.mp4'. This is Ingest Agent's role.
-2025-07-15 12:40:50,067 - SchedulingAgent - DEBUG - Thought Chain: Scheduling content 'Duplicate Content' for future slot.
-2025-07-15 12:40:50,067 - SchedulingAgent - INFO - Asset 'Duplicate Content' (ID: eb6183addde05c2196ce25e6fa34a4baf20f9bf30d33892f452a9a1e88c9a472) successfully scheduled for 2025-07-18 15:13:50.
-2025-07-15 12:40:50,067 - SchedulingAgent - DEBUG - Thought Chain: Scheduling decision complete for asset 'Duplicate Content'.
+2025-07-16 11:16:02,478 - SchedulingAgent - INFO - Scheduling Agent initialized.
+2025-07-16 11:16:08,265 - SchedulingAgent - INFO - Scheduling Agent received processed asset info for: My First Episode
+2025-07-16 11:16:08,265 - SchedulingAgent - DEBUG - Thought Chain: Analyzing received asset info for scheduling decisions.
+2025-07-16 11:16:08,265 - SchedulingAgent - DEBUG - Thought Chain: Not attempting to read or download file from './ingest_processed/asset_b3d3b477_my_first_episode.mp4'. This is Ingest Agent's role.
+2025-07-16 11:16:08,266 - SchedulingAgent - DEBUG - Thought Chain: Scheduling content 'My First Episode' for future slot.
+2025-07-16 11:16:08,266 - SchedulingAgent - INFO - Asset 'My First Episode' (ID: 3e872f2c5008f32b024a9cb02112280e7ef9e2f1bb54a417f685dd96537fa504) successfully scheduled for 2025-07-22 20:42:08.
+2025-07-16 11:16:08,266 - SchedulingAgent - DEBUG - Thought Chain: Scheduling decision complete for asset 'My First Episode'.
+2025-07-16 11:16:20,973 - SchedulingAgent - INFO - Scheduling Agent received processed asset info for: Long Ad Campaign X
+2025-07-16 11:16:20,974 - SchedulingAgent - DEBUG - Thought Chain: Analyzing received asset info for scheduling decisions.
+2025-07-16 11:16:20,974 - SchedulingAgent - DEBUG - Thought Chain: Not attempting to read or download file from './ingest_processed/asset_b1e2f6ec_long_ad_campaign_x.mp4'. This is Ingest Agent's role.
+2025-07-16 11:16:20,974 - SchedulingAgent - DEBUG - Thought Chain: Scheduling ad 'Long Ad Campaign X' for immediate availability.
+2025-07-16 11:16:20,975 - SchedulingAgent - INFO - Asset 'Long Ad Campaign X' (ID: 3c195a0507198c7574551ae014247153b20bac784cf0a5c3b1fa5038c2900093) successfully scheduled for 2025-07-16 12:07:20.
+2025-07-16 11:16:20,975 - SchedulingAgent - DEBUG - Thought Chain: Scheduling decision complete for asset 'Long Ad Campaign X'.
+2025-07-16 11:16:24,646 - SchedulingAgent - INFO - Scheduling Agent received processed asset info for: Ad Missing Meta
+2025-07-16 11:16:24,646 - SchedulingAgent - DEBUG - Thought Chain: Analyzing received asset info for scheduling decisions.
+2025-07-16 11:16:24,647 - SchedulingAgent - DEBUG - Thought Chain: Not attempting to read or download file from './ingest_processed/asset_528237c3_ad_missing_meta.mp4'. This is Ingest Agent's role.
+2025-07-16 11:16:24,647 - SchedulingAgent - DEBUG - Thought Chain: Scheduling ad 'Ad Missing Meta' for immediate availability.
+2025-07-16 11:16:24,647 - SchedulingAgent - INFO - Asset 'Ad Missing Meta' (ID: dbbe5517996826bd5861ac22b745d21d11219055d89243ca1aea0ad31f552b12) successfully scheduled for 2025-07-16 12:03:24.
+2025-07-16 11:16:24,648 - SchedulingAgent - DEBUG - Thought Chain: Scheduling decision complete for asset 'Ad Missing Meta'.
+2025-07-16 11:16:35,301 - SchedulingAgent - INFO - Scheduling Agent received processed asset info for: Duplicate Content
+2025-07-16 11:16:35,316 - SchedulingAgent - DEBUG - Thought Chain: Analyzing received asset info for scheduling decisions.
+2025-07-16 11:16:35,317 - SchedulingAgent - DEBUG - Thought Chain: Not attempting to read or download file from './ingest_processed/asset_899e72b2_duplicate_content.mp4'. This is Ingest Agent's role.
+2025-07-16 11:16:35,317 - SchedulingAgent - DEBUG - Thought Chain: Scheduling content 'Duplicate Content' for future slot.
+2025-07-16 11:16:35,317 - SchedulingAgent - INFO - Asset 'Duplicate Content' (ID: eb6183addde05c2196ce25e6fa34a4baf20f9bf30d33892f452a9a1e88c9a472) successfully scheduled for 2025-07-20 22:06:35.
+2025-07-16 11:16:35,317 - SchedulingAgent - DEBUG - Thought Chain: Scheduling decision complete for asset 'Duplicate Content'.
