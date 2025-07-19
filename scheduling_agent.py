@@ -5,6 +5,11 @@ import time
 import os
 import random  # Import random module
 
+# --- OpenTelemetry Imports ---
+from opentelemetry import trace
+from opentelemetry.context import attach, detach
+from opentelemetry.trace import SpanKind  # For defining span kind
+
 # --- Configuration for the Scheduling Agent ---
 CONFIG = {
     "log_level": "DEBUG",
@@ -40,8 +45,12 @@ class SchedulingAgent:
         self.config = config  # Store config as an instance variable
         logger.info("Scheduling Agent initialized.")
         self.scheduled_content = []  # To keep track of what's been scheduled
+        # Get the OpenTelemetry tracer for this module.
+        # It is expected that the pipeline_orchestrator.py has already set up the global TracerProvider.
+        self.otel_tracer = trace.get_tracer(__name__)
+        logger.info("Scheduling Agent instance fully initialized and ready with OpenTelemetry tracer.")
 
-    def receive_processed_asset_info(self, asset_info):
+    def receive_processed_asset_info(self, asset_info, parent_span=None):  # Added parent_span parameter
         """
         Simulates receiving processed asset information from an upstream agent (e.g., Ingest Agent).
         This method will process metadata for scheduling decisions.
@@ -49,64 +58,84 @@ class SchedulingAgent:
 
         :param asset_info: Dictionary containing processed asset metadata and other details.
                            Expected to contain 'metadata' and 'normalized_file_path'.
+        :param parent_span: The OpenTelemetry Span from the calling context (optional).
         :return: True if scheduling was attempted, False otherwise.
         """
-        logger.info(
-            f"Scheduling Agent received processed asset info for: {asset_info.get('metadata', {}).get('title', 'N/A')}")
-        logger.debug(f"Thought Chain: Analyzing received asset info for scheduling decisions.")
+        # Ensure the parent_span context is active for this function
+        token = None
+        if parent_span:
+            token = attach(trace.set_span_in_context(parent_span))
 
-        metadata = asset_info.get("metadata", {})
-        normalized_file_path = asset_info.get("normalized_file_path")
-        asset_id = metadata.get("checksum_sha256", "N/A")
-        title = metadata.get("title", "Untitled Content")
-        asset_type = metadata.get("asset_type", "episode")
-        duration = metadata.get("duration", 0)
+        try:
+            with self.otel_tracer.start_as_current_span("receive_processed_asset_info", kind=SpanKind.CONSUMER) as span:
+                span.set_attribute("asset.title", asset_info.get('metadata', {}).get('title', 'N/A'))
+                logger.info(
+                    f"Scheduling Agent received processed asset info for: {asset_info.get('metadata', {}).get('title', 'N/A')}")
+                logger.debug(f"Thought Chain: Analyzing received asset info for scheduling decisions.")
 
-        # --- IMPORTANT ROLE BOUNDARY CHECK ---
-        # This agent should NOT be attempting to read or download the file itself.
-        # It only uses the metadata and the *path* to the already processed file.
-        if normalized_file_path and os.path.exists(normalized_file_path) and not os.path.isdir(normalized_file_path):
-            logger.debug(
-                f"Thought Chain: Not attempting to read or download file from '{normalized_file_path}'. This is Ingest Agent's role.")
-            # We could add an explicit check for file content access here if needed for verification,
-            # but the primary verification is the *absence* of download/read logic.
-        elif not normalized_file_path:
-            logger.warning(f"No normalized file path provided for asset '{title}'. Scheduling based on metadata only.")
+                metadata = asset_info.get("metadata", {})
+                normalized_file_path = asset_info.get("normalized_file_path")
+                asset_id = metadata.get("checksum_sha256", "N/A")
+                title = metadata.get("title", "Untitled Content")
+                asset_type = metadata.get("asset_type", "episode")
+                duration = metadata.get("duration", 0)
 
-        # --- Simulate Scheduling Logic ---
-        # For demonstration, we'll just pick a random time within the next 7 days.
-        # In a real scenario, this would involve complex algorithms, platform requirements,
-        # regional availability, ad slot integration, etc.
+                # --- IMPORTANT ROLE BOUNDARY CHECK ---
+                # This agent should NOT be attempting to read or download the file itself.
+                # It only uses the metadata and the *path* to the already processed file.
+                if normalized_file_path and os.path.exists(normalized_file_path) and not os.path.isdir(
+                        normalized_file_path):
+                    logger.debug(
+                        f"Thought Chain: Not attempting to read or download file from '{normalized_file_path}'. This is Ingest Agent's role.")
+                    # We could add an explicit check for file content access here if needed for verification,
+                    # but the primary verification is the *absence* of download/read logic.
+                elif not normalized_file_path:
+                    logger.warning(
+                        f"No normalized file path provided for asset '{title}'. Scheduling based on metadata only.")
 
-        if asset_type == "ad":
-            # Ads might be scheduled more frequently or on demand
-            schedule_time = datetime.now() + timedelta(minutes=random.randint(5, 60))
-            logger.debug(f"Thought Chain: Scheduling ad '{title}' for immediate availability.")
-        else:
-            # Regular content scheduled for a future slot
-            random_days = random.randint(1, self.config["scheduling_window_days"])  # Changed to self.config
-            random_hours = random.randint(0, 23)
-            random_minutes = random.randint(0, 59)
-            schedule_time = datetime.now() + timedelta(days=random_days, hours=random_hours, minutes=random_minutes)
-            logger.debug(f"Thought Chain: Scheduling content '{title}' for future slot.")
+                # --- Simulate Scheduling Logic ---
+                # For demonstration, we'll just pick a random time within the next 7 days.
+                # In a real scenario, this would involve complex algorithms, platform requirements,
+                # regional availability, ad slot integration, etc.
 
-        scheduled_entry = {
-            "asset_id": asset_id,
-            "title": title,
-            "asset_type": asset_type,
-            "scheduled_for": schedule_time.isoformat(),
-            "duration_seconds": duration,
-            "status": "SCHEDULED"
-        }
-        self.scheduled_content.append(scheduled_entry)
-        logger.info(
-            f"Asset '{title}' (ID: {asset_id}) successfully scheduled for {schedule_time.strftime('%Y-%m-%d %H:%M:%S')}.")
-        logger.debug(f"Thought Chain: Scheduling decision complete for asset '{title}'.")
+                if asset_type == "ad":
+                    # Ads might be scheduled more frequently or on demand
+                    schedule_time = datetime.now() + timedelta(minutes=random.randint(5, 60))
+                    logger.debug(f"Thought Chain: Scheduling ad '{title}' for immediate availability.")
+                else:
+                    # Regular content scheduled for a future slot
+                    random_days = random.randint(1, self.config["scheduling_window_days"])  # Changed to self.config
+                    random_hours = random.randint(0, 23)
+                    random_minutes = random.randint(0, 59)
+                    schedule_time = datetime.now() + timedelta(days=random_days, hours=random_hours,
+                                                               minutes=random_minutes)
+                    logger.debug(f"Thought Chain: Scheduling content '{title}' for future slot.")
 
-        # Simulate a small delay for scheduling operations
-        time.sleep(0.1)
+                scheduled_entry = {
+                    "asset_id": asset_id,
+                    "title": title,
+                    "asset_type": asset_type,
+                    "scheduled_for": schedule_time.isoformat(),
+                    "duration_seconds": duration,
+                    "status": "SCHEDULED"
+                }
+                self.scheduled_content.append(scheduled_entry)
+                logger.info(
+                    f"Asset '{title}' (ID: {asset_id}) successfully scheduled for {schedule_time.strftime('%Y-%m-%d %H:%M:%S')}.")
+                logger.debug(f"Thought Chain: Scheduling decision complete for asset '{title}'.")
 
-        return True
+                # Simulate a small delay for scheduling operations
+                time.sleep(0.1)
+
+                span.set_attribute("scheduling.status", "SCHEDULED")
+                span.set_attribute("scheduling.asset_id", asset_id)
+                span.set_attribute("scheduling.scheduled_for", schedule_time.isoformat())
+                span.set_status(trace.StatusCode.OK)
+                return True
+        finally:
+            # Detach the context if it was attached
+            if token:
+                detach(token)
 
     def get_current_schedule(self):
         """Returns the list of content currently scheduled by this agent."""
@@ -134,7 +163,8 @@ if __name__ == "__main__":
 
     scheduling_agent = SchedulingAgent(CONFIG)  # Pass CONFIG here
     logger.info("Simulating receiving processed asset info from Ingest Agent.")
-    scheduling_success = scheduling_agent.receive_processed_asset_info(sample_processed_asset_info)
+    scheduling_success = scheduling_agent.receive_processed_asset_info(sample_processed_asset_info,
+                                                                       parent_span=None)  # Pass parent_span=None for standalone test
 
     logger.info("\n--- Current Scheduled Content ---")
     current_schedule = scheduling_agent.get_current_schedule()

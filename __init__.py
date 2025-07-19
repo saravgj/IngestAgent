@@ -1,0 +1,1 @@
+self.kpi_tracker = {}

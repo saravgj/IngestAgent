@@ -1,285 +1,359 @@
 import os
-import json
-import time
+import asyncio
 import logging
 from datetime import datetime
-
-from langfuse import Langfuse
-
-langfuse = Langfuse(
-  secret_key="sk-lf-ad126451-35c2-438b-9ae6-72b5e5376270",
-  public_key="pk-lf-b9a5480d-3e5e-4330-924c-eeda46ea1db6",
-  host="https://us.cloud.langfuse.com"
-)
-
-import os
-import base64
-
-public = "pk-lf-b9a5480d-3e5e-4330-924c-eeda46ea1db6"
-secret = "sk-lf-ad126451-35c2-438b-9ae6-72b5e5376270"
-auth_string = f"{public}:{secret}"
-LANGFUSE_AUTH = base64.b64encode(auth_string.encode()).decode()
-
-os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] = "https://otlp.us.cloud.langfuse.com"
-os.environ["OTEL_EXPORTER_OTLP_HEADERS"] = f"Authorization=Basic {LANGFUSE_AUTH}"
-os.environ["OTEL_EXPORTER_OTLP_PROTOCOL"] = "http/protobuf"
-
+import time
 
 # --- OpenTelemetry Imports ---
 from opentelemetry import trace
+from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
-from opentelemetry.sdk.resources import Resource
+from opentelemetry.propagate import set_global_textmap
+# CORRECTED IMPORT PATH: TraceContextTextMapPropagator is in opentelemetry.sdk.trace.propagation
+#from opentelemetry.sdk.trace.propagation import TraceContextTextMapPropagator
+#from opentelemetry.propagators.tracecontext import TraceContextTextMapPropagator
+# OLD (no longer valid in your installed version)
+# from opentelemetry.propagators.tracecontext import TraceContextTextMapPropagator
 
-# Import agents and their configurations
+# ✅ NEW (for OpenTelemetry 1.35.0)
+from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+
+exporter = OTLPSpanExporter(
+    endpoint="http://localhost:4318/v1/traces",
+    timeout=5,
+)
+
+
+# --- Agent Imports ---
 from ingest_agent import IngestAgent, CONFIG as INGEST_CONFIG
 from qc_agent import QCAgent, CONFIG as QC_CONFIG
-from graphics_agent import GraphicsAgent  # Assuming GraphicsAgent doesn't have its own config needed here
+from graphics_agent import GraphicsAgent, CONFIG as GRAPHICS_CONFIG
 from scheduling_agent import SchedulingAgent, CONFIG as SCHEDULING_CONFIG
 
-# --- Setup Logging for Orchestrator ---
-LOG_FILE = "pipeline_orchestrator.log"
-if os.path.exists(LOG_FILE):
-    os.remove(LOG_FILE)
+# --- Configuration for the Orchestrator ---
+ORCHESTRATOR_CONFIG = {
+    "log_level": "INFO",
+    "log_file": "pipeline_orchestrator.log",
+    "otel_endpoint": "http://localhost:4318/v1/traces",  # Default OTLP HTTP endpoint
+    "service_name": "cloudport-pipeline-orchestrator",
+    "environment": "development",
+    "langfuse_enabled": False  # Set to True to enable Langfuse integration
+}
 
+# --- Set your Gemini API Key here ---
+# IMPORTANT: Replace "YOUR_GEMINI_API_KEY_HERE" with your actual Gemini API Key.
+# It is highly recommended to set this as an environment variable for production.
+os.environ["GOOGLE_API_KEY"] = "YOUR_GEMINI_API_KEY_HERE"
+# --- End Gemini API Key setup ---
+
+
+# --- Setup Logging ---
 logger = logging.getLogger("PipelineOrchestrator")
-logger.setLevel(logging.DEBUG)  # Set to DEBUG to capture all messages
+logger.setLevel(getattr(logging, ORCHESTRATOR_CONFIG["log_level"].upper()))
 
-file_handler = logging.FileHandler(LOG_FILE)
-file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
-logger.addHandler(file_handler)
+if not logger.handlers:
+    if os.path.exists(ORCHESTRATOR_CONFIG["log_file"]):
+        os.remove(ORCHESTRATOR_CONFIG["log_file"])
 
-stream_handler = logging.StreamHandler()
-stream_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
-logger.addHandler(stream_handler)
+    file_handler = logging.FileHandler(ORCHESTRATOR_CONFIG["log_file"])
+    file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+    logger.addHandler(file_handler)
 
-# --- OpenTelemetry Global Setup ---
-# This block configures the global TracerProvider for the entire pipeline.
-# All agents will then retrieve this global tracer.
-langfuse_public_key = os.environ.get("LANGFUSE_PUBLIC_KEY")
-langfuse_secret_key = os.environ.get("LANGFUSE_SECRET_KEY")
-langfuse_host = os.environ.get("LANGFUSE_HOST", "https://cloud.langfuse.com")
+    stream_handler = logging.StreamHandler()
+    stream_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+    logger.addHandler(stream_handler)
 
-if not langfuse_public_key or not langfuse_secret_key:
-    logger.warning(
-        "Langfuse API keys not found in environment variables. OpenTelemetry traces will not be sent to Langfuse.")
-    provider = TracerProvider()
-else:
-    logger.info("Setting up OTLPSpanExporter for Langfuse in Orchestrator.")
-    # Define a resource for your service, which will be attached to all spans
+
+# --- OpenTelemetry Setup ---
+def setup_opentelemetry():
+    """Sets up the global OpenTelemetry TracerProvider and exporter."""
     resource = Resource.create({
-        "service.name": "cloudport-media-pipeline",
-        "service.version": "1.0.0",
-        "deployment.environment": "development"
+        "service.name": ORCHESTRATOR_CONFIG["service_name"],
+        "environment": ORCHESTRATOR_CONFIG["environment"],
     })
 
-    exporter = OTLPSpanExporter(
-        endpoint=f"{langfuse_host}/v1/traces",
-        headers={
-            "X-Langfuse-Public-Key": langfuse_public_key,
-            "X-Langfuse-Secret-Key": langfuse_secret_key
-        },
-    )
     provider = TracerProvider(resource=resource)
-    processor = BatchSpanProcessor(exporter)
-    provider.add_span_processor(processor)
 
-trace.set_tracer_provider(provider)
-orchestrator_tracer = trace.get_tracer(__name__)
-logger.info("OpenTelemetry TracerProvider globally configured by Orchestrator.")
+    # Configure OTLP HTTP exporter
+    exporter = OTLPSpanExporter(endpoint=ORCHESTRATOR_CONFIG["otel_endpoint"])
+    span_processor = BatchSpanProcessor(exporter)
+    provider.add_span_processor(span_processor)
 
+    # Set the global TracerProvider
+    trace.set_tracer_provider(provider)
 
-# --- End OpenTelemetry Global Setup ---
+    # Set the global propagator for context propagation
+    set_global_textmap(TraceContextTextMapPropagator())
+
+    logger.info(
+        f"OpenTelemetry configured with service.name='{ORCHESTRATOR_CONFIG['service_name']}' and OTLP endpoint='{ORCHESTRATOR_CONFIG['otel_endpoint']}'.")
 
 
 class PipelineOrchestrator:
     """
-    The Pipeline Orchestrator coordinates the flow of media assets
-    through various agents in the Cloudport system.
-    It manages the lifecycle of an asset from ingestion to final scheduling.
+    The central orchestrator for the Cloudport media ingestion pipeline.
+    It coordinates the activities of different agents (Ingest, QC, Graphics, Scheduling).
+    This class demonstrates complex workflow management and inter-agent communication.
     """
 
     def __init__(self):
         self.ingest_agent = IngestAgent(INGEST_CONFIG)
         self.qc_agent = QCAgent(QC_CONFIG)
         self.graphics_agent = GraphicsAgent()
-        self.scheduling_agent = SchedulingAgent(SCHEDULING_CONFIG)  # Pass config to SchedulingAgent
+        self.scheduling_agent = SchedulingAgent(SCHEDULING_CONFIG)
+        self.otel_tracer = trace.get_tracer(__name__)
         logger.info("Pipeline Orchestrator initialized with all agents.")
-        self.total_pipeline_runs = 0
-        self.successful_pipeline_runs = 0
 
-    def _cleanup_directories(self):
-        """Cleans up ingest_source and ingest_processed directories."""
-        for folder in [INGEST_CONFIG["watch_folders"][0], INGEST_CONFIG["output_folder"]]:
-            if os.path.exists(folder):
-                for f in os.listdir(folder):
-                    os.remove(os.path.join(folder, f))
-                os.rmdir(folder)  # Remove directory after emptying
-                logger.info(f"Cleaned up directory: {folder}")
-            os.makedirs(folder, exist_ok=True)  # Recreate empty directories
-            logger.info(f"Recreated empty directory: {folder}")
-
-    def run_pipeline_for_asset(self, asset_path):
+    async def run_pipeline_for_asset(self, asset_path):
         """
-        Runs a single asset through the entire pipeline.
-        Each full pipeline run is a new trace.
+        Orchestrates the end-to-end pipeline for a single media asset.
+        This is the main workflow that ties all agents together.
         """
-        self.total_pipeline_runs += 1
-        logger.info(f"\n--- Orchestrating pipeline for asset: {asset_path} ---")
+        with self.otel_tracer.start_as_current_span(f"pipeline_run_for_{os.path.basename(asset_path)}") as parent_span:
+            parent_span.set_attribute("asset.original_path", asset_path)
+            logger.info(f"\n--- Orchestrating pipeline for asset: {asset_path} ---")
+            logger.debug(f"Thought Chain: Starting orchestration for {asset_path}.")
 
-        # Start a new trace for this entire pipeline run
-        with orchestrator_tracer.start_as_current_span("pipeline_run", kind=trace.SpanKind.SERVER) as pipeline_span:
-            pipeline_span.set_attribute("asset.original_path", asset_path)
-            logger.debug(f"Thought Chain: Starting new pipeline run trace for {asset_path}.")
+            # --- Step 1: Ingest Asset ---
+            logger.info("Orchestrator: Initiating Ingest Agent.")
+            logger.debug("Thought Chain: Calling Ingest Agent's pipeline.")
+            processed_ingest_info = await self.ingest_agent.ingest_asset_pipeline(asset_path, parent_span=parent_span)
 
-            processed_ingest_info = None
-            qc_result = None
+            if processed_ingest_info["status"] in ["FAILED_FORMAT_VALIDATION", "FAILED_NORMALIZATION",
+                                                   "CRITICAL_FAILURE", "DUPLICATE_SKIPPED"]:
+                logger.error(
+                    f"Orchestrator: Ingest Agent failed or skipped asset {asset_path} with status: {processed_ingest_info['status']}. Aborting pipeline.")
+                parent_span.set_status(trace.StatusCode.ERROR,
+                                       description=f"Ingest failed or skipped: {processed_ingest_info['status']}")
+                return
 
-            try:
-                # Step 1: Ingest Agent processing
-                logger.info(f"Orchestrator calling Ingest Agent for {asset_path}...")
-                # Pass the current pipeline_span as the parent
-                processed_ingest_info = self.ingest_agent.ingest_asset_pipeline(asset_path, parent_span=pipeline_span)
-                logger.info(
-                    f"Ingest Agent finished for {asset_path}. Status: {processed_ingest_info.get('status', 'N/A')}")
-                pipeline_span.add_event("ingest_completed", {"status": processed_ingest_info.get('status', 'N/A')})
+            logger.info("Orchestrator: Ingest Agent completed successfully.")
+            logger.info("Ragas Evaluation Completed: %s",
+                        self.ingest_agent.kpi_tracker.get("ragas_score_avg", "N/A"))
 
-                if processed_ingest_info.get("status") in ["FAILED_FORMAT_VALIDATION", "FAILED_NORMALIZATION",
-                                                           "DUPLICATE_SKIPPED", "CRITICAL_FAILURE"]:
-                    logger.warning(f"Ingest pipeline failed or skipped for {asset_path}. Skipping QC and Graphics.")
-                    pipeline_span.set_status(trace.StatusCode.ERROR,
-                                             description=f"Ingest failed or skipped: {processed_ingest_info.get('status')}")
-                    return False  # Stop pipeline if ingest failed/skipped
+            parent_span.add_event("ingest_completed", {"status": processed_ingest_info["status"]})
 
-                # Step 2: QC Agent processing
-                logger.info(f"Orchestrator calling QC Agent for {asset_path}...")
-                # Pass the current pipeline_span as the parent
-                qc_result = self.qc_agent.run_qc_checks(processed_ingest_info, parent_span=pipeline_span)
-                logger.info(f"QC Agent finished for {asset_path}. Status: {qc_result.get('qc_status', 'N/A')}")
-                pipeline_span.add_event("qc_completed", {"status": qc_result.get('qc_status', 'N/A')})
+            # --- Step 2: Quality Control Checks ---
+            logger.info("Orchestrator: Initiating QC Agent.")
+            logger.debug("Thought Chain: Calling QC Agent to perform checks.")
+            qc_results = await asyncio.to_thread(self.qc_agent.run_qc_checks, processed_ingest_info,
+                                                 parent_span=parent_span)
 
-                # Merge QC results into the processed_ingest_info for downstream agents
-                processed_ingest_info["metadata"].update({
-                    "qc_status": qc_result.get("qc_status"),
-                    "qc_flags": qc_result.get("qc_flags"),
-                    "qc_timestamp": qc_result.get("qc_timestamp")
-                })
+            if qc_results.get("qc_status") == "FAIL":
+                logger.error(
+                    f"Orchestrator: QC Agent failed for asset {asset_path}. Flags: {qc_results.get('qc_flags')}. Aborting pipeline.")
+                parent_span.set_status(trace.StatusCode.ERROR, description=f"QC failed: {qc_results.get('qc_flags')}")
+                return
 
-                if qc_result.get("qc_status") == "FAIL":
-                    logger.warning(
-                        f"QC failed for {asset_path}. Graphics and Scheduling might still proceed depending on flags.")
-                    # Do not return False, let it proceed to graphics/scheduling with flags
-                    pipeline_span.set_status(trace.StatusCode.ERROR, description="QC failed.")
+            logger.info("Orchestrator: QC Agent completed successfully (or with review flags).")
+            parent_span.add_event("qc_completed", {"status": qc_results.get("qc_status")})
 
-                # Step 3: Graphics Agent processing (if not a duplicate or critical failure)
-                logger.info(f"Orchestrator calling Graphics Agent for {asset_path}...")
-                # The GraphicsAgent's receive_metadata expects the full message payload
-                graphics_message_payload = {
-                    "event_type": "METADATA_ENRICHED_FOR_GRAPHICS",
-                    "timestamp": datetime.now().isoformat(),
-                    "asset_id": processed_ingest_info["metadata"].get("checksum_sha256", "N/A"),
-                    "metadata_payload": processed_ingest_info["metadata"]  # Pass the updated metadata
-                }
-                # Graphics Agent doesn't directly take a parent_span in its public method,
-                # but its internal methods should retrieve the current span context.
-                graphics_success = self.graphics_agent.receive_metadata(graphics_message_payload)
-                logger.info(f"Graphics Agent finished for {asset_path}. Success: {graphics_success}")
-                pipeline_span.add_event("graphics_completed", {"success": graphics_success})
+            # --- Step 3: Graphics Generation (Inter-Agent Communication) ---
+            logger.info("Orchestrator: Initiating Graphics Agent via message passing.")
+            logger.debug("Thought Chain: Preparing message for Graphics Agent.")
+            graphics_message = await asyncio.to_thread(self.qc_agent.send_to_graphics_agent,
+                                                       qc_results.get("metadata", {}), parent_span=parent_span)
 
-                # Step 4: Scheduling Agent processing
-                logger.info(f"Orchestrator calling Scheduling Agent for {asset_path}...")
-                # Scheduling Agent also doesn't directly take a parent_span,
-                # but its internal methods should retrieve the current span context.
-                scheduling_success = self.scheduling_agent.receive_processed_asset_info(processed_ingest_info)
-                logger.info(f"Scheduling Agent finished for {asset_path}. Success: {scheduling_success}")
-                pipeline_span.add_event("scheduling_completed", {"success": scheduling_success})
+            logger.debug("Thought Chain: Graphics Agent message prepared. Simulating reception.")
+            graphics_processing_success = await asyncio.to_thread(self.graphics_agent.receive_metadata,
+                                                                  graphics_message, parent_span=parent_span)
 
-                self.successful_pipeline_runs += 1
-                pipeline_span.set_status(trace.StatusCode.OK)
-                logger.info(f"--- Pipeline successfully completed for asset: {asset_path} ---")
-                return True
+            if not graphics_processing_success:
+                logger.error(f"Orchestrator: Graphics Agent failed to process asset {asset_path}. Aborting pipeline.")
+                parent_span.set_status(trace.StatusCode.ERROR, description="Graphics processing failed.")
+                return
 
-            except Exception as e:
-                logger.critical(f"Critical error during pipeline orchestration for {asset_path}: {e}", exc_info=True)
-                pipeline_span.set_status(trace.StatusCode.ERROR, description=f"Orchestration failed: {e}")
-                pipeline_span.record_exception(e)
-                return False
-            finally:
-                # Ensure all spans are flushed at the end of the pipeline run
-                # This is important for ensuring traces are sent to Langfuse
-                provider.force_flush()
+            logger.info("Orchestrator: Graphics Agent completed successfully.")
+            parent_span.add_event("graphics_completed", {"success": graphics_processing_success})
 
-    def run_full_test_scenario(self):
-        """
-        Runs a predefined set of test assets through the pipeline.
-        """
-        self._cleanup_directories()
-        logger.info("\n--- Starting Full Pipeline Test Scenario ---")
+            # --- Step 4: Scheduling Decision ---
+            logger.info("Orchestrator: Initiating Scheduling Agent.")
+            logger.debug("Thought Chain: Calling Scheduling Agent to make decisions.")
+            scheduling_success = await asyncio.to_thread(self.scheduling_agent.receive_processed_asset_info, qc_results,
+                                                         parent_span=parent_span)
 
-        # Create dummy files for testing
-        # This part is typically handled by a separate script like create_dummy_files.py
-        # For a self-contained orchestrator, we can include simplified creation here.
-        # Ensure ingest_source directory exists
-        os.makedirs(INGEST_CONFIG["watch_folders"][0], exist_ok=True)
+            if not scheduling_success:
+                logger.error(f"Orchestrator: Scheduling Agent failed for asset {asset_path}. Aborting pipeline.")
+                parent_span.set_status(trace.StatusCode.ERROR, description="Scheduling failed.")
+                return
 
-        test_assets = [
-            # Valid asset
-            {"name": "my_episode_s01e01.mp4",
-             "metadata": {"title": "My First Episode", "genre": "Sci-Fi", "language": "English", "ei_rating": "E"},
-             "size_mb": 20},
-            # Unsupported format
-            {"name": "bad_format_video.avi", "metadata": {}, "size_mb": 1},
-            # Long ad (simulated duration exceeds limit)
-            {"name": "long_ad_campaign_x.mp4",
-             "metadata": {"title": "Long Ad Campaign X", "genre": "Commercial", "language": "English",
-                          "asset_type": "ad"}, "size_mb": 101},
-            # Missing metadata
-            {"name": "ad_missing_meta.mp4", "metadata": {}, "size_mb": 5},
-            # Corrupted header (simulated FFprobe failure)
-            {"name": "corrupted_header.mp4", "metadata": {}, "size_mb": 0.05},
-            # Oversized file (simulated size exceeds limit)
-            {"name": "oversized_file_test.mp4", "metadata": {}, "size_mb": 1},  # Small actual size, but simulated large
-            # Duplicate content (will be skipped after first one is processed)
-            {"name": "duplicate_content_video.mp4",
-             "metadata": {"title": "Duplicate Content", "genre": "Test", "language": "English"}, "size_mb": 10},
-            {"name": "another_copy_of_duplicate.mp4",
-             "metadata": {"title": "Duplicate Content", "genre": "Test", "language": "English"}, "size_mb": 10},
-        ]
+            logger.info("Orchestrator: Scheduling Agent completed successfully.")
+            parent_span.add_event("scheduling_completed", {"success": scheduling_success})
 
-        # Create dummy files
-        for asset_data in test_assets:
-            file_path = os.path.join(INGEST_CONFIG["watch_folders"][0], asset_data["name"])
-            with open(file_path, "wb") as f:
-                # Write content based on simulated size
-                f.write(b"A" * int(asset_data["size_mb"] * 1024 * 1024))
+            logger.info(f"--- Pipeline for asset {asset_path} completed successfully ---")
+            parent_span.set_status(trace.StatusCode.OK)
 
-            # Create sidecar JSON if metadata is provided
-            if asset_data["metadata"]:
-                sidecar_path = os.path.splitext(file_path)[0] + ".json"
-                with open(sidecar_path, "w") as f:
-                    json.dump(asset_data["metadata"], f, indent=2)
-            logger.info(f"Created dummy file: {asset_data['name']} with size {asset_data['size_mb']}MB")
 
-        logger.info("All dummy files created for test scenario.")
-        time.sleep(1)  # Give a moment for file system to settle
+# --- Main execution ---
+async def main():
+    setup_opentelemetry()
+    orchestrator = PipelineOrchestrator()
 
-        # Run each asset through the pipeline
-        for asset_data in test_assets:
-            asset_path = os.path.join(INGEST_CONFIG["watch_folders"][0], asset_data["name"])
-            self.run_pipeline_for_asset(asset_path)
-            time.sleep(0.5)  # Small delay between processing assets
+    # Clean up previous runs' output and logs
+    for folder in ["./ingest_source", "./ingest_processed", "./graphics_output"]:
+        os.makedirs(folder, exist_ok=True)
+        for f in os.listdir(folder):
+            os.remove(os.path.join(folder, f))
 
-        logger.info("\n--- Full Pipeline Test Scenario Completed ---")
-        logger.info(f"Total pipeline runs: {self.total_pipeline_runs}")
-        logger.info(f"Successful pipeline runs: {self.successful_pipeline_runs}")
-        logger.info("Check Langfuse dashboard for detailed traces.")
+    for log_file in [ORCHESTRATOR_CONFIG["log_file"], INGEST_CONFIG["log_file"],
+                     QC_CONFIG["log_file"], GRAPHICS_CONFIG["log_file"],
+                     SCHEDULING_CONFIG["log_file"]]:
+        if os.path.exists(log_file):
+            os.remove(log_file)
+
+    logger.info("Cleaned up previous run's files and logs.")
+
+    logger.info("Creating dummy ingest files...")
+
+    import json
+    INGEST_SOURCE_DIR = "./ingest_source"
+    os.makedirs(INGEST_SOURCE_DIR, exist_ok=True)
+
+    # File 1: Valid Media File with Sidecar Metadata
+    file_name_1 = "my_episode_s01e01.mp4"
+    sidecar_name_1 = "my_episode_s01e01.json"
+    simulated_size_mb_1 = 20
+    with open(os.path.join(INGEST_SOURCE_DIR, file_name_1), "wb") as f:
+        f.write(b"This is a dummy video file content for a valid episode." * (1024 * 1024 * simulated_size_mb_1 // 50))
+    metadata_1 = {"title": "My First Episode", "genre": "Sci-Fi", "language": "English", "director": "Jane Doe",
+                  "episode_number": 1, "season_number": 1, "ei_rating": "E"}
+    with open(os.path.join(INGEST_SOURCE_DIR, sidecar_name_1), "w") as f:
+        json.dump(metadata_1, f, indent=2)
+
+    # File 2: Media File with Unsupported Format
+    file_name_2 = "bad_format_video.avi"
+    with open(os.path.join(INGEST_SOURCE_DIR, file_name_2), "w") as f:
+        f.write("This is a dummy AVI file, which is likely not allowed by policy.")
+
+    # File 3: Media File Violating Policy Rules (e.g., Simulated Duration Limit)
+    file_name_3 = "long_ad_campaign_x.mp4"
+    simulated_size_mb = 101
+    with open(os.path.os.path.join(INGEST_SOURCE_DIR, file_name_3), "wb") as f:
+        f.write(b"A" * (1024 * 1024 * simulated_size_mb))
+    sidecar_name_3 = "long_ad_campaign_x.json"
+    metadata_3 = {"title": "Long Ad Campaign X", "genre": "Commercial", "language": "English", "asset_type": "ad"}
+    with open(os.path.join(INGEST_SOURCE_DIR, sidecar_name_3), "w") as f:
+        json.dump(metadata_3, f, indent=2)
+
+    # File 4: Media File with Missing or Incomplete Metadata
+    file_name_4 = "ad_missing_meta.mp4"
+    with open(os.path.join(INGEST_SOURCE_DIR, file_name_4), "w") as f:
+        f.write("This is a dummy ad file with intentionally missing metadata.")
+
+    # File 5: Media File Simulating Blank Frames
+    file_name_5 = "video_with_blank_frames.mp4"
+    with open(os.path.join(INGEST_SOURCE_DIR, file_name_5), "w") as f:
+        f.write("This is a dummy video file content. Imagine it has blank frames within.")
+
+    # File 6: Media File with Minimal/Ambiguous Content (No Sidecar)
+    file_name_6 = "mystery_video.mp4"
+    with open(os.path.join(INGEST_SOURCE_DIR, file_name_6), "w") as f:
+        f.write("This is a dummy video file with minimal content, no sidecar.")
+
+    # File 7: Misleading Content File
+    file_name_7 = "happy_adventure.mp4"
+    sidecar_name_7 = "happy_adventure.json"
+    with open(os.path.join(INGEST_SOURCE_DIR, file_name_7), "w") as f:
+        f.write("This is a dummy video file content for a misleading test.")
+    metadata_7 = {"title": "A Tragic Drama", "genre": "Drama", "language": "English",
+                  "description": "A story of loss, despair, and unavoidable fate. Not a happy ending."}
+    with open(os.path.join(INGEST_SOURCE_DIR, sidecar_name_7), "w") as f:
+        json.dump(metadata_7, f, indent=2)
+
+    # File 8: Nonsensical/Garbage Content File
+    file_name_8 = "random_gibberish.mp4"
+    sidecar_name_8 = "random_gibberish.json"
+    with open(os.path.join(INGEST_SOURCE_DIR, file_name_8), "w") as f:
+        f.write("asdfjkl;qweruiopzxcvbnm,./1234567890!@#$%^&*()")
+    metadata_8 = {"title": "asdfjkl;qweruiopzxcvbnm", "genre": "Nonsense", "language": "Gibberish",
+                  "description": "This content is completely random and has no discernible meaning or structure. It's just a string of characters."}
+    with open(os.path.join(INGEST_SOURCE_DIR, sidecar_name_8), "w") as f:
+        json.dump(metadata_8, f, indent=2)
+
+    # File 9: Highly Abstract/Conceptual Content File
+    file_name_9 = "concept_of_freedom.mp4"
+    sidecar_name_9 = "concept_of_freedom.json"
+    with open(os.path.join(INGEST_SOURCE_DIR, file_name_9), "w") as f:
+        f.write("This is a dummy video file representing an abstract concept.")
+    metadata_9 = {"title": "The Concept of Freedom", "genre": "Philosophical Documentary", "language": "English",
+                  "description": "An exploration of the multifaceted and evolving understanding of liberty and autonomy across different cultures and historical periods."}
+    with open(os.path.join(INGEST_SOURCE_DIR, sidecar_name_9), "w") as f:
+        json.dump(metadata_9, f, indent=2)
+
+    # File 10: Highly Repetitive Content File
+    file_name_10 = "repeating_pattern_video.mp4"
+    sidecar_name_10 = "repeating_pattern_video.json"
+    with open(os.path.join(INGEST_SOURCE_DIR, file_name_10), "w") as f:
+        f.write("Repeat. Repeat. Repeat. Repeat. Repeat. Repeat. Repeat. Repeat. Repeat. Repeat.")
+    metadata_10 = {"title": "A Study in Repetition", "genre": "Experimental", "language": "English",
+                   "description": "This video consists solely of a repeating visual and auditory pattern designed to explore the effects of monotony."}
+    with open(os.path.join(INGEST_SOURCE_DIR, sidecar_name_10), "w") as f:
+        json.dump(metadata_10, f, indent=2)
+
+    # File 11: Highly Specific/Niche Content File
+    file_name_11 = "quantum_chromodynamics_lecture.mp4"
+    sidecar_name_11 = "quantum_chromodynamics_lecture.json"
+    with open(os.path.join(INGEST_SOURCE_DIR, file_name_11), "w") as f:
+        f.write("This is a dummy video file for a highly specific physics lecture.")
+    metadata_11 = {"title": "Introduction to Quantum Chromodynamics", "genre": "Educational", "language": "English",
+                   "description": "A graduate-level lecture covering the strong nuclear force, quarks, gluons, and asymptotic freedom within the Standard Model of particle physics.",
+                   "lecturer": "Dr. Alice Smith", "course_code": "PHY701"}
+    with open(os.path.join(INGEST_SOURCE_DIR, sidecar_name_11), "w") as f:
+        json.dump(metadata_11, f, indent=2)
+
+    # File 12: Contradictory Numerical/Factual Data File
+    file_name_12 = "historical_anomaly.mp4"
+    sidecar_name_12 = "historical_anomaly.json"
+    with open(os.path.join(INGEST_SOURCE_DIR, file_name_12), "w") as f:
+        f.write("This is a dummy video file about a historical anomaly.")
+    metadata_12 = {"title": "The Great Fire of London (1966)", "genre": "Historical Documentary", "language": "English",
+                   "description": "A documentary detailing the devastating fire that swept through London in the year 1966, causing widespread destruction.",
+                   "historical_period": "20th Century"}
+    with open(os.path.join(INGEST_SOURCE_DIR, sidecar_name_12), "w") as f:
+        json.dump(metadata_12, f, indent=2)
+
+    # File 13: Corrupted Header Simulation File
+    file_name_13 = "corrupted_header.mp4"
+    with open(os.path.join(INGEST_SOURCE_DIR, file_name_13), "wb") as f:
+        f.write(os.urandom(50))
+
+    # File 14: Duplicate File Uploads (Same Content, Different Names)
+    duplicate_content = b"This is the unique content for the duplicate test files."
+    file_name_14_orig = "original_content_video.mp4"
+    with open(os.path.join(INGEST_SOURCE_DIR, file_name_14_orig), "wb") as f:
+        f.write(duplicate_content)
+    file_name_14_dup1 = "duplicate_content_version_1.mp4"
+    with open(os.path.join(INGEST_SOURCE_DIR, file_name_14_dup1), "wb") as f:
+        f.write(duplicate_content)
+    file_name_14_dup2 = "another_copy_of_content.mp4"
+    with open(os.path.join(INGEST_SOURCE_DIR, file_name_14_dup2), "wb") as f:
+        f.write(duplicate_content)
+
+    # File 15: Oversized File Handling
+    file_name_15 = "oversized_file_test.mp4"
+    with open(os.path.join(INGEST_SOURCE_DIR, file_name_15), "wb") as f:
+        f.write(b"This file is small, but will be simulated as 50GB.")
+
+    logger.info("Dummy ingest files created.")
+
+    media_files_to_process = [
+        os.path.join(INGEST_SOURCE_DIR, f) for f in os.listdir(INGEST_SOURCE_DIR)
+        if f.endswith(('.mp4', '.mov', '.mxf', '.avi'))
+    ]
+    media_files_to_process.sort()
+
+    for asset_path in media_files_to_process:
+        await orchestrator.run_pipeline_for_asset(asset_path)
+        time.sleep(0.5)
+
+    logger.info("\n--- All asset pipelines orchestrated. ---")
+    logger.info("Check individual agent logs and the 'ingest_processed' and 'graphics_output' folders for results.")
+    logger.info("KPI Tracker Contents: %s", orchestrator.ingest_agent.kpi_tracker)
+    logger.info("Ragas Evaluation Completed: %s", orchestrator.ingest_agent.kpi_tracker.get("ragas_score_avg", "N/A"))
 
 
 if __name__ == "__main__":
-    orchestrator = PipelineOrchestrator()
-    orchestrator.run_full_test_scenario()
-
-    # Ensure all spans are flushed before exiting the program
-    trace.get_tracer_provider().force_flush()
-    logging.shutdown()  # Properly shut down logging
+    asyncio.run(main())

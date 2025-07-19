@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/IngestAgentLangfuse.iml" filepath="$PROJECT_DIR$/.idea/IngestAgentLangfuse.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/LLMModelEval_Ragas.iml" filepath="$PROJECT_DIR$/.idea/LLMModelEval_Ragas.iml" />
     </modules>
   </component>
 </project>
